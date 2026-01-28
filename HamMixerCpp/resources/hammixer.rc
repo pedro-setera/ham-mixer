@@ -1,0 +1,4 @@
+// Windows resource file for HamMixer
+// This sets the application icon shown in Windows Explorer
+
+IDI_ICON1 ICON "icons/hammixer.ico"

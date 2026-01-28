@@ -1,0 +1,9 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="/images">
+        <file>Smeter_background.jpg</file>
+    </qresource>
+    <qresource prefix="/icons">
+        <file>icons/antenna.png</file>
+    </qresource>
+</RCC>

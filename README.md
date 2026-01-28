@@ -1,0 +1,324 @@
+# HamMixer CT7BAC
+
+### Professional Dual-Source Audio Mixer for Ham Radio Operators
+
+**Synchronize your local transceiver with remote WebSDR receivers for enhanced DX monitoring**
+
+---
+
+## Overview
+
+HamMixer is a specialized Windows desktop application designed for ham radio operators who want to **simultaneously monitor their local transceiver and remote WebSDR receivers**. It provides real-time audio mixing, automatic frequency synchronization via CI-V protocol, and professional-grade DSP processing.
+
+Whether you're chasing DX, monitoring propagation, or comparing reception between your station and remote SDRs around the world, HamMixer gives you the tools to do it seamlessly.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           HamMixer CT7BAC v1.3                              │
+│                    IC-7300 + WebSDR Dual Audio Mixer                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   ┌─────────────┐              ┌──────────────┐              ┌───────────┐  │
+│   │  IC-7300    │──── CI-V ───▶│              │              │  WebSDR   │  │
+│   │  (or other  │              │   HamMixer   │◀── HTTP ────│  Sites    │  │
+│   │  Icom rig)  │──── Audio ──▶│              │              │  (World)  │  │
+│   └─────────────┘              └──────┬───────┘              └───────────┘  │
+│                                       │                                     │
+│                                       ▼                                     │
+│                              ┌────────────────┐                             │
+│                              │  Mixed Audio   │                             │
+│                              │  Output + WAV  │                             │
+│                              │   Recording    │                             │
+│                              └────────────────┘                             │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Key Features
+
+### Audio Mixing & Processing
+- **Dual-channel mixer** with independent volume, pan, and mute controls
+- **Real-time crossfader** for smooth transitions between radio and WebSDR audio
+- **Low-latency WASAPI audio engine** (~21ms buffer cycles)
+- **Soft-clipping limiter** to prevent audio distortion
+- **WAV recording** of mixed output with automatic file naming
+
+### CI-V Integration (Icom Radios)
+- **Automatic frequency sync** - WebSDR follows your VFO in real-time
+- **Mode synchronization** - USB, LSB, CW, AM, FM modes automatically matched
+- **Dual S-Meter display** - Compare signal strength between local and remote
+- **Tested with IC-7300** - Compatible with other Icom CI-V radios
+
+### WebSDR Control
+- **Multiple WebSDR sites** - Switch between receivers worldwide
+- **Automatic band selection** - WebSDR changes bands with your radio
+- **Embedded browser control** - No need to manually tune the WebSDR
+- **S-Meter extraction** - Real-time signal level from WebSDR
+
+### Time Synchronization
+- **GCC-PHAT algorithm** - Professional-grade delay detection
+- **Auto-sync button** - Automatically align audio streams
+- **Manual delay control** - 0-600ms adjustable delay
+- **Compensates for internet latency** between local and remote audio
+
+---
+
+## System Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                              APPLICATION LAYERS                              │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌────────────────────────────────────────────────────────────────────────┐  │
+│  │                     PRESENTATION LAYER (Qt6 Widgets)                   │  │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────┐  │  │
+│  │  │ Channel  │ │ Channel  │ │  Master  │ │ S-Meter  │ │  Transport   │  │  │
+│  │  │ Strip 1  │ │ Strip 2  │ │  Strip   │ │ Display  │ │  Controls    │  │  │
+│  │  │ (Radio)  │ │ (WebSDR) │ │          │ │          │ │              │  │  │
+│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────────┘  │  │
+│  │                         ▲                                              │  │
+│  └─────────────────────────┼──────────────────────────────────────────────┘  │
+│                            │ Qt Signals/Slots                                │
+│  ┌─────────────────────────┼──────────────────────────────────────────────┐  │
+│  │                     AUDIO ENGINE LAYER                                 │  │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌────────────┐  │  │
+│  │  │ AudioManager │  │  MixerCore   │  │ DelayBuffer  │  │  Recorder  │  │  │
+│  │  │ (Streams)    │  │  (DSP)       │  │ (Sync)       │  │  (WAV)     │  │  │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘  └────────────┘  │  │
+│  │         ▲                  ▲                                           │  │
+│  └─────────┼──────────────────┼───────────────────────────────────────────┘  │
+│            │                  │ Lock-free Atomics                            │
+│  ┌─────────┼──────────────────┼───────────────────────────────────────────┐  │
+│  │         │    HARDWARE ABSTRACTION LAYER                                │  │
+│  │  ┌──────┴───────┐  ┌───────┴──────┐  ┌──────────────┐                  │  │
+│  │  │ WasapiDevice │  │ CIVController│  │WebSdrManager │                  │  │
+│  │  │ (Audio I/O)  │  │ (Serial/USB) │  │ (HTTP/JS)    │                  │  │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘                  │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Signal Flow
+
+```
+    ┌─────────────┐                                      ┌─────────────┐
+    │   IC-7300   │                                      │   WebSDR    │
+    │  (USB Audio)│                                      │  (Browser)  │
+    └──────┬──────┘                                      └──────┬──────┘
+           │                                                    │
+           │ 48kHz/16-bit Stereo                               │ 48kHz/16-bit Stereo
+           ▼                                                    ▼
+    ┌──────────────┐                                    ┌──────────────┐
+    │   Channel 1  │                                    │   Channel 2  │
+    │   ┌────────┐ │                                    │   ┌────────┐ │
+    │   │ Volume │ │                                    │   │ Volume │ │
+    │   └────┬───┘ │                                    │   └────┬───┘ │
+    │        ▼     │                                    │        ▼     │
+    │   ┌────────┐ │                                    │   ┌────────┐ │
+    │   │  Pan   │ │                                    │   │  Pan   │ │
+    │   └────┬───┘ │                                    │   └────┬───┘ │
+    │        ▼     │                                    │        ▼     │
+    │   ┌────────┐ │                                    │   ┌────────┐ │
+    │   │ Delay  │ │                                    │   │  Mute  │ │
+    │   │ Buffer │ │                                    │   └────┬───┘ │
+    │   └────┬───┘ │                                    │        │     │
+    └────────┼─────┘                                    └────────┼─────┘
+             │                                                   │
+             └─────────────────┬─────────────────────────────────┘
+                               │
+                               ▼
+                        ┌──────────────┐
+                        │   Crossfader │
+                        │   & Mixer    │
+                        └──────┬───────┘
+                               │
+                               ▼
+                        ┌──────────────┐
+                        │ Soft Clipper │
+                        └──────┬───────┘
+                               │
+                               ▼
+                        ┌──────────────┐
+                        │Master Volume │
+                        └──────┬───────┘
+                               │
+              ┌────────────────┼────────────────┐
+              │                │                │
+              ▼                ▼                ▼
+       ┌──────────┐     ┌──────────┐     ┌──────────┐
+       │  Output  │     │ Level    │     │   WAV    │
+       │  Device  │     │ Meters   │     │ Recorder │
+       └──────────┘     └──────────┘     └──────────┘
+```
+
+---
+
+## Requirements
+
+### Hardware
+- **Icom transceiver** with CI-V interface (IC-7300 recommended)
+- **USB Audio Interface** or radio's built-in USB audio (IC-7300 has this)
+- **Windows PC** with decent CPU for browser rendering
+
+### Software
+- **Windows 10/11** (64-bit)
+- **Visual C++ Redistributable 2022** ([Download](https://aka.ms/vs/17/release/vc_redist.x64.exe))
+
+### Recommended Audio Setup
+For best results, use **VB-Cable** (virtual audio cable) to route WebSDR audio:
+1. Set browser audio output to VB-Cable
+2. Select VB-Cable as WebSDR input in HamMixer
+
+---
+
+## Installation
+
+### Pre-built Release
+1. Download the latest release from [Releases](https://github.com/pedro-setera/ham-mixer/releases)
+2. Extract to your desired location (e.g., `C:\HamMixer`)
+3. Run `HamMixer.exe`
+
+### Build from Source
+
+**Prerequisites:**
+- Qt 6.7+ with WebEngine component
+- CMake 3.21+
+- Visual Studio 2019/2022 or MinGW-w64
+
+**Build steps:**
+```batch
+cd HamMixerCpp
+mkdir build && cd build
+cmake -G "Visual Studio 17 2022" -A x64 -DCMAKE_PREFIX_PATH="C:\Qt\6.8.0\msvc2022_64" ..
+cmake --build . --config Release
+```
+
+Or use the provided build script:
+```batch
+cd HamMixerCpp
+build.bat
+```
+
+---
+
+## Quick Start Guide
+
+### 1. Connect Your Radio
+- Connect IC-7300 via USB (provides both CI-V and Audio)
+- Or connect CI-V interface + separate audio cables
+
+### 2. Configure Audio Devices
+- **Radio Input**: Select your radio's USB audio device
+- **WebSDR Input**: Select VB-Cable or system audio capture
+- **Output**: Select your speakers/headphones
+
+### 3. Connect CI-V
+- Select the COM port for your radio
+- Click **Connect** - frequency display should show your VFO
+
+### 4. Select WebSDR Site
+- Choose a WebSDR from the dropdown (or add custom sites)
+- The WebSDR will automatically tune to your radio's frequency
+
+### 5. Adjust Mix
+- Use **channel sliders** for individual volume control
+- Use **crossfader** to blend between radio and WebSDR
+- Use **BOTH/RADIO/WEBSDR** toggle for quick switching
+
+### 6. Synchronize Audio
+- Click **Auto-Sync** to automatically detect and compensate for delay
+- Or manually adjust the delay slider until audio aligns
+
+---
+
+## Audio Parameters
+
+| Parameter | Value | Notes |
+|-----------|-------|-------|
+| Sample Rate | 48,000 Hz | Fixed (IC-7300 native rate) |
+| Bit Depth | 16-bit signed | Standard PCM |
+| Channels | Stereo | Dual mono mixed to stereo |
+| Buffer Size | 1024 samples | ~21ms latency |
+| Delay Range | 0-600ms | Compensates internet latency |
+
+---
+
+## Supported WebSDR Sites
+
+HamMixer works with standard WebSDR 2.x sites. Pre-configured sites include:
+- **Maasbree, Netherlands** - Excellent HF coverage
+- **Utah, USA** - 160m-40m bands
+- **Twente, Netherlands** - Wide frequency coverage
+- And many more...
+
+You can add custom WebSDR sites through the **Manage Sites** dialog.
+
+---
+
+## Troubleshooting
+
+### No audio from radio
+- Check Windows sound settings - ensure radio USB audio is not muted
+- Verify correct input device selected in HamMixer
+
+### WebSDR not following frequency
+- Ensure CI-V is connected (green indicator)
+- Check that WebSDR site supports the current band
+- Some WebSDRs have limited band coverage
+
+### Audio out of sync
+- Click **Auto-Sync** button during voice transmission
+- Manually adjust delay slider if auto-sync fails
+- Typical internet delay is 200-400ms
+
+### High CPU usage
+- WebSDR browser rendering can be CPU-intensive
+- Close unnecessary browser tabs/applications
+
+---
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit issues or pull requests.
+
+### Development Setup
+1. Fork the repository
+2. Clone your fork
+3. Install Qt 6.7+ with WebEngine
+4. Build using CMake
+5. Submit PR with your changes
+
+---
+
+## Contact
+
+**Developed by CT7BAC**
+
+For questions, suggestions, or collaboration inquiries, please look up my contact information on [QRZ.com](https://www.qrz.com) using callsign **CT7BAC**.
+
+---
+
+## License
+
+This project is provided as-is for the amateur radio community. See [LICENSE](LICENSE) file for details.
+
+---
+
+## Acknowledgments
+
+- **PA3FWM** - Creator of WebSDR
+- **Icom** - For the excellent CI-V protocol documentation
+- **Qt Project** - For the powerful cross-platform framework
+- **Amateur Radio Community** - For inspiration and testing
+
+---
+
+<p align="center">
+  <i>73 de CT7BAC</i>
+</p>
