@@ -13,8 +13,8 @@ ChannelStrip::ChannelStrip(const QString& title, QWidget* parent)
 void ChannelStrip::setupUI()
 {
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(5, 5, 5, 5);
-    mainLayout->setSpacing(5);
+    mainLayout->setContentsMargins(5, 0, 5, 0);
+    mainLayout->setSpacing(4);
 
     // Title row: label + percentage
     QHBoxLayout* titleRow = new QHBoxLayout();
@@ -38,11 +38,11 @@ void ChannelStrip::setupUI()
     controlsRow->setSpacing(4);
     controlsRow->setAlignment(Qt::AlignCenter);
 
-    // Volume slider (vertical) - reduced height to fit in shorter Levels section
+    // Volume slider (vertical)
     m_volumeSlider = new QSlider(Qt::Vertical, this);
     m_volumeSlider->setRange(0, 100);
     m_volumeSlider->setValue(100);
-    m_volumeSlider->setFixedHeight(130);  // Reduced by 30px from 160
+    m_volumeSlider->setFixedHeight(155);
     m_volumeSlider->setToolTip("Channel Volume");
     connect(m_volumeSlider, &QSlider::valueChanged, this, [this](int value) {
         updateVolumeLabel(value);
@@ -50,10 +50,10 @@ void ChannelStrip::setupUI()
     });
     controlsRow->addWidget(m_volumeSlider);
 
-    // Level meter (mono) - reduced height to fit in shorter Levels section
+    // Level meter (mono)
     m_levelMeter = new LevelMeter(false, this);
     m_levelMeter->setFixedWidth(36);
-    m_levelMeter->setFixedHeight(130);  // Reduced by 30px from 160
+    m_levelMeter->setFixedHeight(155);
     controlsRow->addWidget(m_levelMeter);
 
     mainLayout->addLayout(controlsRow);

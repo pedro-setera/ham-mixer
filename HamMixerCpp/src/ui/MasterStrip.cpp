@@ -13,43 +13,42 @@ MasterStrip::MasterStrip(QWidget* parent)
 void MasterStrip::setupUI()
 {
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(5, 5, 5, 5);
-    mainLayout->setSpacing(8);
+    mainLayout->setContentsMargins(5, 0, 5, 0);
+    mainLayout->setSpacing(4);
 
-    // Title row with label and percentage side by side, centered
+    // Title row: label + percentage (match ChannelStrip layout)
     QHBoxLayout* titleLayout = new QHBoxLayout();
-    titleLayout->setSpacing(2);
-    titleLayout->setAlignment(Qt::AlignCenter);
+    titleLayout->setSpacing(4);  // Match ChannelStrip spacing
 
     m_titleLabel = new QLabel("Master", this);
+    m_titleLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     m_titleLabel->setProperty("channelLabel", true);
     titleLayout->addWidget(m_titleLabel);
 
     m_volumeLabel = new QLabel("80%", this);
-    m_volumeLabel->setProperty("channelLabel", true);
-    m_volumeLabel->setFixedWidth(45);  // Fixed width to prevent shifting
-    m_volumeLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    m_volumeLabel->setStyleSheet("QLabel { color: #FFFFFF; }");  // Match ChannelStrip font color
+    m_volumeLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    m_volumeLabel->setFixedWidth(40);  // Match ChannelStrip width
+    m_volumeLabel->setStyleSheet("QLabel { color: #FFFFFF; }");  // White, not bold
     titleLayout->addWidget(m_volumeLabel);
 
     mainLayout->addLayout(titleLayout);
 
     // Horizontal layout for slider and meter
     QHBoxLayout* controlsLayout = new QHBoxLayout();
-    controlsLayout->setSpacing(10);
+    controlsLayout->setSpacing(4);  // Match ChannelStrip spacing
     controlsLayout->setAlignment(Qt::AlignCenter);
 
-    // Volume slider (vertical) - reduced height to fit in shorter Levels section
+    // Volume slider (vertical)
     m_volumeSlider = new QSlider(Qt::Vertical, this);
     m_volumeSlider->setRange(0, 100);
     m_volumeSlider->setValue(80);
-    m_volumeSlider->setFixedHeight(130);  // Reduced by 30px from 160
+    m_volumeSlider->setFixedHeight(155);
     m_volumeSlider->setToolTip("Master Volume");
     controlsLayout->addWidget(m_volumeSlider, 0, Qt::AlignCenter);
 
-    // Stereo level meter - reduced height to fit in shorter Levels section
+    // Stereo level meter
     m_levelMeter = new LevelMeter(true, this);
-    m_levelMeter->setFixedHeight(130);  // Reduced by 30px from 160
+    m_levelMeter->setFixedHeight(155);
     controlsLayout->addWidget(m_levelMeter, 0, Qt::AlignCenter);
 
     mainLayout->addLayout(controlsLayout);

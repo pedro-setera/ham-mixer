@@ -110,10 +110,10 @@ void RadioControlPanel::setupUI()
     toolsLayout->setContentsMargins(10, 5, 10, 5);
     toolsLayout->setSpacing(10);
 
-    // Audio source toggle button (BOTH/RADIO/WEBSDR)
-    m_sourceToggleButton = new QPushButton("BOTH", toolsGroup);
-    m_sourceToggleButton->setFixedWidth(100);
-    m_sourceToggleButton->setToolTip("Toggle audio source: BOTH -> RADIO -> WEBSDR -> BOTH");
+    // Audio source toggle button (RADIO + WEBSDR / RADIO / WEBSDR)
+    m_sourceToggleButton = new QPushButton("RADIO + WEBSDR", toolsGroup);
+    m_sourceToggleButton->setFixedWidth(140);
+    m_sourceToggleButton->setToolTip("Toggle audio source: RADIO + WEBSDR -> RADIO -> WEBSDR");
     updateSourceButtonText();
 
     // Record button
@@ -190,7 +190,7 @@ void RadioControlPanel::onSiteComboChanged(int index)
 
 void RadioControlPanel::onSourceToggleClicked()
 {
-    // Circular toggle: BOTH -> RADIO -> WEBSDR -> BOTH
+    // Circular toggle: RADIO + WEBSDR -> RADIO -> WEBSDR
     switch (m_audioSourceMode) {
         case Both:
             m_audioSourceMode = RadioOnly;
@@ -219,7 +219,7 @@ void RadioControlPanel::updateSourceButtonText()
 {
     switch (m_audioSourceMode) {
         case Both:
-            m_sourceToggleButton->setText("BOTH");
+            m_sourceToggleButton->setText("RADIO + WEBSDR");
             m_sourceToggleButton->setStyleSheet("");  // Default style
             break;
         case RadioOnly:

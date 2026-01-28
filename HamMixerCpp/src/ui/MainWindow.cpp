@@ -192,17 +192,17 @@ void MainWindow::setupUI()
     QGroupBox* levelsGroup = new QGroupBox("Levels", this);
     levelsGroup->setFixedHeight(260);  // Height to align with Delay+Crossfader sections
     QHBoxLayout* metersLayout = new QHBoxLayout(levelsGroup);
-    metersLayout->setContentsMargins(15, 5, 15, 5);
+    metersLayout->setContentsMargins(15, 0, 15, 0);
     metersLayout->setSpacing(20);
     metersLayout->setAlignment(Qt::AlignCenter);
 
     // Radio channel
     m_radioStrip = new ChannelStrip("Radio", this);
-    metersLayout->addWidget(m_radioStrip);
+    metersLayout->addWidget(m_radioStrip, 0, Qt::AlignTop);
 
     // WebSDR channel
     m_websdrStrip = new ChannelStrip("WebSDR", this);
-    metersLayout->addWidget(m_websdrStrip);
+    metersLayout->addWidget(m_websdrStrip, 0, Qt::AlignTop);
 
     // Vertical separator
     QFrame* separator = new QFrame(this);
@@ -212,7 +212,7 @@ void MainWindow::setupUI()
 
     // Master strip
     m_masterStrip = new MasterStrip(this);
-    metersLayout->addWidget(m_masterStrip);
+    metersLayout->addWidget(m_masterStrip, 0, Qt::AlignTop);
 
     contentLayout->addWidget(levelsGroup);
 
@@ -808,10 +808,33 @@ void MainWindow::onSerialConnectClicked()
     m_civController->requestFrequency();
     m_civController->requestMode();
 
-    // Step 4: Wait 500ms for CI-V to respond before loading WebSDR
+    // Step 4: Wait 1500ms for CI-V to respond before loading WebSDR
     // This ensures we have frequency/mode data before WebSDR page opens
-    QTimer::singleShot(500, this, [this]() {
-        qDebug() << "MainWindow: CI-V handshake complete, loading WebSDR...";
+    // The timeout is long enough for slow radios but short enough to feel responsive
+    QTimer::singleShot(1500, this, [this]() {
+        // Check if we actually received a response from the radio
+        // If frequency is still 0, no CI-V device responded
+        uint64_t freq = m_civController->currentFrequency();
+        if (freq == 0) {
+            qWarning() << "MainWindow: No CI-V response received - no radio detected";
+
+            // Show error to user
+            QMessageBox::critical(this, "No Radio Response",
+                "No CI-V response received from the radio.\n\n"
+                "Please check:\n"
+                "• The radio is powered on\n"
+                "• The USB cable is connected\n"
+                "• The correct COM port is selected\n"
+                "• CI-V is enabled in radio settings");
+
+            // Disconnect and reset state
+            m_civController->disconnect();
+            m_civConnected = false;
+            m_radioControlPanel->setSerialConnectionState(CIVController::Disconnected);
+            return;
+        }
+
+        qDebug() << "MainWindow: CI-V handshake complete, frequency:" << freq << "Hz, loading WebSDR...";
 
         // Load only the selected WebSDR site (single site for lower CPU usage)
         WebSdrSite selectedSite = m_radioControlPanel->selectedSite();
