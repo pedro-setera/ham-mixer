@@ -14,7 +14,7 @@ Whether you're chasing DX, monitoring propagation, or comparing reception betwee
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                           HamMixer CT7BAC v1.3                              │
+│                           HamMixer CT7BAC v1.4                              │
 │                    IC-7300 + WebSDR Dual Audio Mixer                        │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
@@ -54,14 +54,58 @@ Whether you're chasing DX, monitoring propagation, or comparing reception betwee
 ### WebSDR Control
 - **Multiple WebSDR sites** - Switch between receivers worldwide
 - **Automatic band selection** - WebSDR changes bands with your radio
-- **Embedded browser control** - No need to manually tune the WebSDR
+- **Embedded browser** - WebSDR page displayed within the main application
 - **S-Meter extraction** - Real-time signal level from WebSDR
 
 ### Time Synchronization
 - **GCC-PHAT algorithm** - Professional-grade delay detection
-- **Auto-sync button** - Automatically align audio streams
-- **Manual delay control** - 0-600ms adjustable delay
+- **Auto-sync button** - Automatically align audio streams (2-second capture)
+- **Manual delay control** - 0-700ms adjustable delay
 - **Compensates for internet latency** between local and remote audio
+
+---
+
+## User Interface Layout
+
+```
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                              HamMixer CT7BAC v1.4                              │
+├────────────────────────────────────────────────────────────────────────────────┤
+│ ┌─────────────────┐ ┌───────────┐ ┌──────────────┐ ┌────────────────────────┐  │
+│ │ CI-V Connection │ │  WebSDR   │ │  Radio Info  │ │        Tools           │  │
+│ │ [Port▼][Connect]│ │ [Site▼]   │ │ Freq | Mode  │ │ [BOTH] [REC] ●         │  │
+│ └─────────────────┘ └───────────┘ └──────────────┘ └────────────────────────┘  │
+├────────────────────────────────────────────────────────────────────────────────┤
+│ ┌─────────────────────────────────────┐  ┌──────────────────────────────────┐  │
+│ │          Device Selection           │  │            S-Meters              │  │
+│ │  Radio Input | Loopback | Output    │  │     [Radio]      [WebSDR]        │  │
+│ └─────────────────────────────────────┘  └──────────────────────────────────┘  │
+├────────────────────────────────────────────────────────────────────────────────┤
+│ ┌───────────────────────┐  ┌────────────────────────────────────────────────┐  │
+│ │    Delay (Radio)      │  │                   Levels                       │  │
+│ │ [Auto-Sync]   300ms   │  │   Radio      WebSDR    │    Master             │  │
+│ │ ═══════════●════════  │  │   100%       100%      │     80%               │  │
+│ ├───────────────────────┤  │  ┌─┐ █      ┌─┐ █      │    ┌─┐ ██             │  │
+│ │      Crossfader       │  │  │ │ █      │ │ █      │    │ │ ██             │  │
+│ │  Radio ●───────WebSDR │  │  │ │ █      │ │ █      │    │ │ ██             │  │
+│ │                       │  │  └─┘ █      └─┘ █      │    └─┘ ██             │  │
+│ └───────────────────────┘  │  [MUTE]     [MUTE]     │    [MUTE]             │  │
+│                            └────────────────────────────────────────────────┘  │
+├────────────────────────────────────────────────────────────────────────────────┤
+│ ┌────────────────────────────────────────────────────────────────────────────┐ │
+│ │                           WebSDR Browser                                   │ │
+│ │                                                                            │ │
+│ │                    [Embedded WebSDR page display]                          │ │
+│ │                                                                            │ │
+│ └────────────────────────────────────────────────────────────────────────────┘ │
+└────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Top Row Sections (Left to Right)
+- **CI-V Connection (30%)**: COM port selection and Connect/Disconnect button
+- **WebSDR (20%)**: Site selector dropdown
+- **Radio Info (25%)**: Current frequency and mode display
+- **Tools (25%)**: BOTH/RADIO/WEBSDR toggle and REC button with indicator
 
 ---
 
@@ -75,8 +119,8 @@ Whether you're chasing DX, monitoring propagation, or comparing reception betwee
 │  ┌────────────────────────────────────────────────────────────────────────┐  │
 │  │                     PRESENTATION LAYER (Qt6 Widgets)                   │  │
 │  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────┐  │  │
-│  │  │ Channel  │ │ Channel  │ │  Master  │ │ S-Meter  │ │  Transport   │  │  │
-│  │  │ Strip 1  │ │ Strip 2  │ │  Strip   │ │ Display  │ │  Controls    │  │  │
+│  │  │ Channel  │ │ Channel  │ │  Master  │ │ S-Meter  │ │   Embedded   │  │  │
+│  │  │ Strip 1  │ │ Strip 2  │ │  Strip   │ │ Display  │ │   Browser    │  │  │
 │  │  │ (Radio)  │ │ (WebSDR) │ │          │ │          │ │              │  │  │
 │  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────────┘  │  │
 │  │                         ▲                                              │  │
@@ -109,7 +153,7 @@ Whether you're chasing DX, monitoring propagation, or comparing reception betwee
 ```
     ┌─────────────┐                                      ┌─────────────┐
     │   IC-7300   │                                      │   WebSDR    │
-    │  (USB Audio)│                                      │  (Browser)  │
+    │  (USB Audio)│                                      │ (Embedded)  │
     └──────┬──────┘                                      └──────┬──────┘
            │                                                    │
            │ 48kHz/16-bit Stereo                               │ 48kHz/16-bit Stereo
@@ -221,9 +265,10 @@ build.bat
 ### 3. Connect CI-V
 - Select the COM port for your radio
 - Click **Connect** - frequency display should show your VFO
+- WebSDR page will load automatically in the embedded browser
 
 ### 4. Select WebSDR Site
-- Choose a WebSDR from the dropdown (or add custom sites)
+- Choose a WebSDR from the dropdown (or add custom sites via File menu)
 - The WebSDR will automatically tune to your radio's frequency
 
 ### 5. Adjust Mix
@@ -245,7 +290,7 @@ build.bat
 | Bit Depth | 16-bit signed | Standard PCM |
 | Channels | Stereo | Dual mono mixed to stereo |
 | Buffer Size | 1024 samples | ~21ms latency |
-| Delay Range | 0-600ms | Compensates internet latency |
+| Delay Range | 0-700ms | Compensates internet latency |
 
 ---
 
@@ -257,7 +302,7 @@ HamMixer works with standard WebSDR 2.x sites. Pre-configured sites include:
 - **Twente, Netherlands** - Wide frequency coverage
 - And many more...
 
-You can add custom WebSDR sites through the **Manage Sites** dialog.
+You can add custom WebSDR sites through **File > Manage WebSDR...** menu.
 
 ---
 

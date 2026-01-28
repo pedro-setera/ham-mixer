@@ -32,13 +32,19 @@ public:
     };
     Q_ENUM(State)
 
-    explicit WebSdrController(QObject* parent = nullptr);
+    explicit WebSdrController(QWidget* parentWidget = nullptr, QObject* parent = nullptr);
     ~WebSdrController();
 
-    // Show/hide the browser window
+    // Get the web view widget for embedding in another window
+    QWebEngineView* webView() const { return m_webView; }
+
+    // Show/hide the browser window (only when using separate window mode)
     void showWindow();
     void hideWindow();
     bool isWindowVisible() const;
+
+    // Check if using embedded mode
+    bool isEmbedded() const { return m_embedded; }
 
     // Load/unload site
     void loadSite(const WebSdrSite& site);
@@ -91,11 +97,12 @@ private:
     void runJavaScript(const QString& script, std::function<void(const QVariant&)> callback);
     void initializeWebSdr();
 
-    QWidget* m_browserWindow;      // Separate window for the browser
+    QWidget* m_browserWindow;      // Separate window for the browser (null if embedded)
     QWebEngineView* m_webView;
     WebSdrSite m_currentSite;
     State m_state;
     bool m_audioStarted;
+    bool m_embedded;               // True if embedded in another window
 
     // Pending operations (to apply after page loads)
     uint64_t m_pendingFrequencyHz;

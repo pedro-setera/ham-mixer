@@ -15,6 +15,7 @@
 #include <QSplitter>
 #include <QIcon>
 #include <QDebug>
+#include <QWebEngineView>
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -82,7 +83,7 @@ void MainWindow::setupWindow()
 {
     setWindowTitle(QString("%1 v%2 (%3)").arg(HAMMIXER_APP_NAME).arg(HAMMIXER_VERSION_STRING).arg(HAMMIXER_VERSION_DATE));
     setWindowIcon(QIcon(":/icons/icons/antenna.png"));
-    setMinimumSize(1000, 675);  // Compact size without embedded browser
+    setMinimumSize(1200, 876);  // Wider window (+200px) with embedded browser
     resize(m_settings.window().size.width(), m_settings.window().size.height());
     move(m_settings.window().position);
 
@@ -100,15 +101,9 @@ void MainWindow::setupUI()
     mainLayout->setSpacing(10);
 
     // ========== Radio Control Panel (compact single row at top) ==========
+    // Now includes: CI-V 30%, WebSDR 20%, Radio Info 25%, Tools 25%
     m_radioControlPanel = new RadioControlPanel(this);
     mainLayout->addWidget(m_radioControlPanel);
-
-    // Create WebSDR manager (single site at a time for lower CPU usage)
-    m_webSdrManager = new WebSdrManager(this);
-
-    // Set site list in manager and populate dropdown (no sites loaded yet)
-    m_webSdrManager->setSiteList(m_settings.webSdrSites());
-    m_radioControlPanel->setSiteList(m_settings.webSdrSites());
 
     // ========== Device Panel and S-Meters section ==========
     QHBoxLayout* topLayout = new QHBoxLayout();
@@ -137,12 +132,12 @@ void MainWindow::setupUI()
 
     mainLayout->addLayout(topLayout);
 
-    // Main content area
+    // Main content area (controls + levels)
     QHBoxLayout* contentLayout = new QHBoxLayout();
     contentLayout->setSpacing(15);
     contentLayout->setAlignment(Qt::AlignTop);
 
-    // Left side: Controls in a widget container
+    // Left side: Controls in a widget container (no Tools section - moved to top row)
     QWidget* controlsWidget = new QWidget(this);
     controlsWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     QVBoxLayout* controlsLayout = new QVBoxLayout(controlsWidget);
@@ -189,18 +184,13 @@ void MainWindow::setupUI()
     crossfaderLayout->addWidget(m_crossfader);
     controlsLayout->addWidget(crossfaderGroup);
 
-    // Tools controls (renamed from Transport)
-    QGroupBox* toolsGroup = new QGroupBox("Tools", this);
-    toolsGroup->setFixedHeight(93);
-    QVBoxLayout* toolsLayout = new QVBoxLayout(toolsGroup);
-    m_transport = new TransportControls(this);
-    toolsLayout->addWidget(m_transport);
-    controlsLayout->addWidget(toolsGroup);
+    // No more Tools group here - moved to RadioControlPanel top row
 
     contentLayout->addWidget(controlsWidget, 1);
 
-    // Right side: Levels (in a group box)
+    // Right side: Levels (in a group box) - aligned with Delay+Crossfader stack
     QGroupBox* levelsGroup = new QGroupBox("Levels", this);
+    levelsGroup->setFixedHeight(260);  // Height to align with Delay+Crossfader sections
     QHBoxLayout* metersLayout = new QHBoxLayout(levelsGroup);
     metersLayout->setContentsMargins(15, 5, 15, 5);
     metersLayout->setSpacing(20);
@@ -226,7 +216,34 @@ void MainWindow::setupUI()
 
     contentLayout->addWidget(levelsGroup);
 
-    mainLayout->addLayout(contentLayout, 1);
+    mainLayout->addLayout(contentLayout);
+
+    // ========== Embedded WebSDR Browser (bottom section) ==========
+    QGroupBox* browserGroup = new QGroupBox("WebSDR Browser", this);
+    browserGroup->setFixedHeight(300);
+    browserGroup->setContentsMargins(0, 0, 0, 0);  // Remove group box margins
+    QVBoxLayout* browserLayout = new QVBoxLayout(browserGroup);
+    browserLayout->setContentsMargins(5, 0, 5, 5);  // Reduced top margin to avoid double spacing
+
+    // Create a container widget for the browser with its own layout
+    QWidget* browserContainer = new QWidget(browserGroup);
+    browserContainer->setMinimumHeight(260);
+    QVBoxLayout* containerLayout = new QVBoxLayout(browserContainer);
+    containerLayout->setContentsMargins(0, 0, 0, 0);
+    containerLayout->setSpacing(0);
+    browserLayout->addWidget(browserContainer);
+
+    mainLayout->addWidget(browserGroup);
+
+    // Create WebSDR manager with the browser container for embedded mode
+    m_webSdrManager = new WebSdrManager(browserContainer, this);
+
+    // Set site list in manager and populate dropdown (no sites loaded yet)
+    m_webSdrManager->setSiteList(m_settings.webSdrSites());
+    m_radioControlPanel->setSiteList(m_settings.webSdrSites());
+
+    // Pre-initialize Chromium engine at startup to avoid visual blink on first connect
+    m_webSdrManager->preInitialize();
 }
 
 void MainWindow::setupMenuBar()
@@ -253,10 +270,10 @@ void MainWindow::setupMenuBar()
 
 void MainWindow::connectSignals()
 {
-    // Tools section - audio source mode toggle and record
-    connect(m_transport, &TransportControls::audioSourceModeChanged,
+    // Tools section - audio source mode toggle and record (now in RadioControlPanel)
+    connect(m_radioControlPanel, &RadioControlPanel::audioSourceModeChanged,
             this, &MainWindow::onAudioSourceModeChanged);
-    connect(m_transport, &TransportControls::recordClicked,
+    connect(m_radioControlPanel, &RadioControlPanel::recordClicked,
             this, &MainWindow::onRecordClicked);
 
     // Delay
@@ -416,12 +433,12 @@ void MainWindow::onRecordClicked()
 
     if (recorder->isRecording()) {
         recorder->stopRecording();
-        m_transport->setRecordingActive(false);
+        m_radioControlPanel->setRecordingActive(false);
         qDebug() << "Recording stopped";
     } else {
         QString filename = recorder->startRecording();
         if (!filename.isEmpty()) {
-            m_transport->setRecordingActive(true);
+            m_radioControlPanel->setRecordingActive(true);
             qDebug() << "Recording started:" << filename;
         } else {
             QMessageBox::warning(this, "Error", "Failed to start recording");
@@ -476,17 +493,17 @@ void MainWindow::onCrossfaderChanged(float radioVol, float radioPan, float websd
     applyPanningWithMuteOverride();
 }
 
-void MainWindow::onAudioSourceModeChanged(TransportControls::AudioSourceMode mode)
+void MainWindow::onAudioSourceModeChanged(RadioControlPanel::AudioSourceMode mode)
 {
     applyAudioSourceMode(mode);
 }
 
-void MainWindow::applyAudioSourceMode(TransportControls::AudioSourceMode mode)
+void MainWindow::applyAudioSourceMode(RadioControlPanel::AudioSourceMode mode)
 {
     MixerCore* mixer = m_audioManager->mixer();
 
     switch (mode) {
-        case TransportControls::Both:
+        case RadioControlPanel::Both:
             // Unmute both channels - reset MUTE buttons to disabled (unchecked)
             m_radioStrip->setMuted(false);
             m_websdrStrip->setMuted(false);
@@ -496,7 +513,7 @@ void MainWindow::applyAudioSourceMode(TransportControls::AudioSourceMode mode)
             }
             break;
 
-        case TransportControls::RadioOnly:
+        case RadioControlPanel::RadioOnly:
             // Radio unmuted, WebSDR muted
             m_radioStrip->setMuted(false);
             m_websdrStrip->setMuted(true);
@@ -506,7 +523,7 @@ void MainWindow::applyAudioSourceMode(TransportControls::AudioSourceMode mode)
             }
             break;
 
-        case TransportControls::WebSdrOnly:
+        case RadioControlPanel::WebSdrOnly:
             // Radio muted, WebSDR unmuted
             m_radioStrip->setMuted(true);
             m_websdrStrip->setMuted(false);
@@ -530,7 +547,7 @@ void MainWindow::checkAndUnmuteWebSdrChannel(const QString& siteId)
         m_websdrStrip->setMuted(false);
         mixer = m_audioManager->mixer();
         if (mixer) mixer->setChannel2Mute(false);
-        applyAudioSourceMode(m_transport->audioSourceMode());
+        applyAudioSourceMode(m_radioControlPanel->audioSourceMode());
         return;
     }
 
@@ -569,7 +586,7 @@ void MainWindow::checkAndUnmuteWebSdrChannel(const QString& siteId)
     mixer->setChannel2Mute(false);
 
     // Apply current audio source mode (in case it's not BOTH)
-    applyAudioSourceMode(m_transport->audioSourceMode());
+    applyAudioSourceMode(m_radioControlPanel->audioSourceMode());
 
     qDebug() << "MainWindow: Unmuted WebSDR channel after site ready:" << siteId;
 }
@@ -671,13 +688,13 @@ void MainWindow::onMuteChanged()
     MixerCore* mixer = m_audioManager->mixer();
     if (!mixer) return;
 
-    TransportControls::AudioSourceMode mode = m_transport->audioSourceMode();
+    RadioControlPanel::AudioSourceMode mode = m_radioControlPanel->audioSourceMode();
 
     // When a MUTE button is manually clicked, it resets the toggle to BOTH mode
     // This allows the user to override the toggle state by clicking mute buttons
-    if (mode != TransportControls::Both) {
+    if (mode != RadioControlPanel::Both) {
         // Reset toggle to BOTH and apply the current mute button states
-        m_transport->setAudioSourceMode(TransportControls::Both);
+        m_radioControlPanel->setAudioSourceMode(RadioControlPanel::Both);
         // The setAudioSourceMode call will trigger applyAudioSourceMode which handles everything
         return;
     }
@@ -699,10 +716,10 @@ void MainWindow::applyPanningWithMuteOverride()
     bool ch2Muted = m_websdrStrip->isMuted();
 
     // Also consider audio source mode
-    TransportControls::AudioSourceMode mode = m_transport->audioSourceMode();
-    if (mode == TransportControls::RadioOnly) {
+    RadioControlPanel::AudioSourceMode mode = m_radioControlPanel->audioSourceMode();
+    if (mode == RadioControlPanel::RadioOnly) {
         ch2Muted = true;
-    } else if (mode == TransportControls::WebSdrOnly) {
+    } else if (mode == RadioControlPanel::WebSdrOnly) {
         ch1Muted = true;
     }
 
@@ -807,9 +824,7 @@ void MainWindow::onSerialConnectClicked()
 
         // Step 5: Wait for WebSDR to start loading, then start audio engine
         QTimer::singleShot(200, this, [this]() {
-            // Bring main GUI to foreground
-            this->raise();
-            this->activateWindow();
+            // Note: raise()/activateWindow() removed - not needed with embedded WebSDR
 
             // Step 6: Start audio engine
             QString radioInput = m_devicePanel->getSelectedInputId();
@@ -839,10 +854,10 @@ void MainWindow::onSerialConnectClicked()
                 applyPanningWithMuteOverride();
 
                 // Apply audio source mode
-                applyAudioSourceMode(m_transport->audioSourceMode());
+                applyAudioSourceMode(m_radioControlPanel->audioSourceMode());
 
                 // Enable recording
-                m_transport->setRecordEnabled(true);
+                m_radioControlPanel->setRecordEnabled(true);
 
                 qDebug() << "Audio streams started";
             } else {
@@ -880,11 +895,11 @@ void MainWindow::onSerialDisconnectClicked()
     // Step 3: Stop recording if active
     if (m_audioManager->recorder() && m_audioManager->recorder()->isRecording()) {
         m_audioManager->recorder()->stopRecording();
-        m_transport->setRecordingActive(false);
+        m_radioControlPanel->setRecordingActive(false);
     }
 
     // Disable recording button
-    m_transport->setRecordEnabled(false);
+    m_radioControlPanel->setRecordEnabled(false);
 
     // Step 4: Unload WebSDR (single site)
     if (m_webSdrManager) {

@@ -16,7 +16,6 @@
 #include "ui/ChannelStrip.h"
 #include "ui/MasterStrip.h"
 #include "ui/Crossfader.h"
-#include "ui/TransportControls.h"
 #include "ui/SMeter.h"
 #include "ui/RadioControlPanel.h"
 #include "serial/CIVController.h"
@@ -44,7 +43,7 @@ private slots:
     void checkSyncResult();
 
     // Audio source mode (BOTH/RADIO/WEBSDR toggle)
-    void onAudioSourceModeChanged(TransportControls::AudioSourceMode mode);
+    void onAudioSourceModeChanged(RadioControlPanel::AudioSourceMode mode);
 
     // CI-V serial connection slots
     void onSerialConnectClicked();
@@ -75,7 +74,6 @@ private:
     ChannelStrip* m_websdrStrip;
     MasterStrip* m_masterStrip;
     Crossfader* m_crossfader;
-    TransportControls* m_transport;
 
     // CI-V Controller
     CIVController* m_civController;
@@ -127,7 +125,7 @@ private:
     void refreshDevices();
     void applyPanningWithMuteOverride();
     void onMuteChanged();
-    void applyAudioSourceMode(TransportControls::AudioSourceMode mode);
+    void applyAudioSourceMode(RadioControlPanel::AudioSourceMode mode);
 
     // Peak detection and auto-level adjustment before unmuting WebSDR
     void checkAndUnmuteWebSdrChannel(const QString& siteId);

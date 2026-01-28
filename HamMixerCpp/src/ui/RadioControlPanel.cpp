@@ -1,7 +1,7 @@
 /*
  * RadioControlPanel.cpp
  *
- * Compact single-row UI panel for CI-V serial port and WebSDR site controls
+ * Compact single-row UI panel for CI-V, WebSDR, Radio Info, and Tools
  * Part of HamMixer CT7BAC
  */
 
@@ -15,6 +15,9 @@
 RadioControlPanel::RadioControlPanel(QWidget* parent)
     : QWidget(parent)
     , m_isConnected(false)
+    , m_audioSourceMode(Both)
+    , m_recording(false)
+    , m_blinkState(false)
 {
     setupUI();
     connectSignals();
@@ -28,12 +31,13 @@ RadioControlPanel::RadioControlPanel(QWidget* parent)
 
 void RadioControlPanel::setupUI()
 {
-    // Main horizontal layout - single row, equally distributed
+    // Main horizontal layout - single row with specific proportions
+    // CI-V 30%, WebSDR 20%, Radio Info 25%, Tools 25%
     QHBoxLayout* mainLayout = new QHBoxLayout(this);
     mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(10);
 
-    // ===== CI-V Serial Connection Section =====
+    // ===== CI-V Serial Connection Section (30%) =====
     QGroupBox* serialGroup = new QGroupBox("CI-V Connection", this);
     QHBoxLayout* serialLayout = new QHBoxLayout(serialGroup);
     serialLayout->setContentsMargins(10, 5, 10, 5);
@@ -42,23 +46,23 @@ void RadioControlPanel::setupUI()
     QLabel* portLabel = new QLabel("Port:", serialGroup);
     m_portCombo = new QComboBox(serialGroup);
     m_portCombo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    m_portCombo->setStyleSheet("QComboBox { min-width: 60px; }");  // Override global min-width
+    m_portCombo->setStyleSheet("QComboBox { min-width: 60px; }");
     m_portCombo->setToolTip("Select the COM port connected to the IC-7300");
 
     m_connectButton = new QPushButton("Connect", serialGroup);
-    m_connectButton->setFixedWidth(85);  // Fixed width to fit "Disconnect"
+    m_connectButton->setFixedWidth(85);
     m_connectButton->setCheckable(true);
     m_connectButton->setToolTip("Connect to or disconnect from the radio");
     updateConnectButtonStyle();
 
     serialLayout->addWidget(portLabel);
-    serialLayout->addWidget(m_portCombo, 1);  // Stretch factor 1
+    serialLayout->addWidget(m_portCombo, 1);
     serialLayout->addWidget(m_connectButton);
 
-    mainLayout->addWidget(serialGroup, 1);  // Equal stretch
+    mainLayout->addWidget(serialGroup, 30);
 
-    // ===== WebSDR Site Section =====
-    QGroupBox* webSdrGroup = new QGroupBox("WebSDR Site", this);
+    // ===== WebSDR Site Section (20%) =====
+    QGroupBox* webSdrGroup = new QGroupBox("WebSDR", this);
     QHBoxLayout* webSdrLayout = new QHBoxLayout(webSdrGroup);
     webSdrLayout->setContentsMargins(10, 5, 10, 5);
     webSdrLayout->setSpacing(8);
@@ -66,20 +70,15 @@ void RadioControlPanel::setupUI()
     QLabel* siteLabel = new QLabel("Site:", webSdrGroup);
     m_siteCombo = new QComboBox(webSdrGroup);
     m_siteCombo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    m_siteCombo->setStyleSheet("QComboBox { min-width: 80px; }");  // Override global min-width
+    m_siteCombo->setStyleSheet("QComboBox { min-width: 80px; }");
     m_siteCombo->setToolTip("Select WebSDR site to use");
 
-    m_webSdrStatusLabel = new QLabel("Not loaded", webSdrGroup);
-    m_webSdrStatusLabel->setFixedWidth(70);
-    m_webSdrStatusLabel->setStyleSheet("QLabel { color: #808080; }");
-
     webSdrLayout->addWidget(siteLabel);
-    webSdrLayout->addWidget(m_siteCombo, 1);  // Stretch factor 1
-    webSdrLayout->addWidget(m_webSdrStatusLabel);
+    webSdrLayout->addWidget(m_siteCombo, 1);
 
-    mainLayout->addWidget(webSdrGroup, 1);  // Equal stretch
+    mainLayout->addWidget(webSdrGroup, 20);
 
-    // ===== Radio Info Section =====
+    // ===== Radio Info Section (25%) =====
     QGroupBox* infoGroup = new QGroupBox("Radio Info", this);
     QHBoxLayout* infoLayout = new QHBoxLayout(infoGroup);
     infoLayout->setContentsMargins(10, 5, 10, 5);
@@ -103,7 +102,50 @@ void RadioControlPanel::setupUI()
     infoLayout->addWidget(modeLabel);
     infoLayout->addWidget(m_modeLabel);
 
-    mainLayout->addWidget(infoGroup, 1);  // Equal stretch
+    mainLayout->addWidget(infoGroup, 25);
+
+    // ===== Tools Section (25%) =====
+    QGroupBox* toolsGroup = new QGroupBox("Tools", this);
+    QHBoxLayout* toolsLayout = new QHBoxLayout(toolsGroup);
+    toolsLayout->setContentsMargins(10, 5, 10, 5);
+    toolsLayout->setSpacing(10);
+
+    // Audio source toggle button (BOTH/RADIO/WEBSDR)
+    m_sourceToggleButton = new QPushButton("BOTH", toolsGroup);
+    m_sourceToggleButton->setFixedWidth(100);
+    m_sourceToggleButton->setToolTip("Toggle audio source: BOTH -> RADIO -> WEBSDR -> BOTH");
+    updateSourceButtonText();
+
+    // Record button
+    m_recordButton = new QPushButton("REC", toolsGroup);
+    m_recordButton->setProperty("buttonType", "record");
+    m_recordButton->setCheckable(true);
+    m_recordButton->setFixedWidth(60);
+    m_recordButton->setEnabled(false);  // Disabled until connected
+
+    // Recording indicator (12px red circle, blinks when recording)
+    m_recordIndicator = new QLabel(toolsGroup);
+    m_recordIndicator->setFixedSize(12, 12);
+    m_recordIndicator->setStyleSheet("background-color: transparent; border-radius: 6px;");
+    m_recordIndicator->hide();
+
+    toolsLayout->addWidget(m_sourceToggleButton);
+    toolsLayout->addWidget(m_recordButton);
+    toolsLayout->addWidget(m_recordIndicator);
+    toolsLayout->addStretch();
+
+    mainLayout->addWidget(toolsGroup, 25);
+
+    // Blink timer for recording indicator
+    m_blinkTimer = new QTimer(this);
+    connect(m_blinkTimer, &QTimer::timeout, this, [this]() {
+        m_blinkState = !m_blinkState;
+        m_recordIndicator->setStyleSheet(
+            m_blinkState ?
+            "background-color: #F44336; border-radius: 6px;" :
+            "background-color: #800000; border-radius: 6px;"
+        );
+    });
 }
 
 void RadioControlPanel::connectSignals()
@@ -116,6 +158,12 @@ void RadioControlPanel::connectSignals()
 
     connect(m_siteCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &RadioControlPanel::onSiteComboChanged);
+
+    connect(m_sourceToggleButton, &QPushButton::clicked,
+            this, &RadioControlPanel::onSourceToggleClicked);
+
+    connect(m_recordButton, &QPushButton::clicked,
+            this, &RadioControlPanel::recordClicked);
 }
 
 void RadioControlPanel::onConnectButtonClicked()
@@ -138,6 +186,78 @@ void RadioControlPanel::onSiteComboChanged(int index)
     if (index >= 0 && index < m_sites.size()) {
         emit webSdrSiteChanged(m_sites[index]);
     }
+}
+
+void RadioControlPanel::onSourceToggleClicked()
+{
+    // Circular toggle: BOTH -> RADIO -> WEBSDR -> BOTH
+    switch (m_audioSourceMode) {
+        case Both:
+            m_audioSourceMode = RadioOnly;
+            break;
+        case RadioOnly:
+            m_audioSourceMode = WebSdrOnly;
+            break;
+        case WebSdrOnly:
+            m_audioSourceMode = Both;
+            break;
+    }
+    updateSourceButtonText();
+    emit audioSourceModeChanged(m_audioSourceMode);
+}
+
+void RadioControlPanel::setAudioSourceMode(AudioSourceMode mode)
+{
+    if (m_audioSourceMode != mode) {
+        m_audioSourceMode = mode;
+        updateSourceButtonText();
+        emit audioSourceModeChanged(m_audioSourceMode);
+    }
+}
+
+void RadioControlPanel::updateSourceButtonText()
+{
+    switch (m_audioSourceMode) {
+        case Both:
+            m_sourceToggleButton->setText("BOTH");
+            m_sourceToggleButton->setStyleSheet("");  // Default style
+            break;
+        case RadioOnly:
+            m_sourceToggleButton->setText("RADIO");
+            m_sourceToggleButton->setStyleSheet(
+                "QPushButton { background-color: #2E7D32; }"
+                "QPushButton:hover { background-color: #388E3C; }"
+            );
+            break;
+        case WebSdrOnly:
+            m_sourceToggleButton->setText("WEBSDR");
+            m_sourceToggleButton->setStyleSheet(
+                "QPushButton { background-color: #1565C0; }"
+                "QPushButton:hover { background-color: #1976D2; }"
+            );
+            break;
+    }
+}
+
+void RadioControlPanel::setRecordingActive(bool recording)
+{
+    m_recording = recording;
+    m_recordButton->setChecked(recording);
+
+    if (recording) {
+        m_recordIndicator->show();
+        m_blinkState = true;
+        m_recordIndicator->setStyleSheet("background-color: #F44336; border-radius: 6px;");
+        m_blinkTimer->start(500);  // Blink every 500ms
+    } else {
+        m_recordIndicator->hide();
+        m_blinkTimer->stop();
+    }
+}
+
+void RadioControlPanel::setRecordEnabled(bool enabled)
+{
+    m_recordButton->setEnabled(enabled);
 }
 
 QString RadioControlPanel::selectedPort() const
@@ -236,7 +356,7 @@ void RadioControlPanel::setSerialConnectionState(CIVController::ConnectionState 
             break;
 
         case CIVController::Connecting:
-            // Keep current state, button shows "Connecting..."
+            // Keep current state, button shows "..."
             m_connectButton->setText("...");
             return;
 
@@ -256,27 +376,8 @@ void RadioControlPanel::setSerialConnectionState(CIVController::ConnectionState 
 
 void RadioControlPanel::setWebSdrState(WebSdrController::State state)
 {
-    switch (state) {
-        case WebSdrController::Unloaded:
-            m_webSdrStatusLabel->setText("Not loaded");
-            m_webSdrStatusLabel->setStyleSheet("QLabel { color: #808080; }");
-            break;
-
-        case WebSdrController::Loading:
-            m_webSdrStatusLabel->setText("Loading...");
-            m_webSdrStatusLabel->setStyleSheet("QLabel { color: #FFEB3B; }");
-            break;
-
-        case WebSdrController::Ready:
-            m_webSdrStatusLabel->setText("Ready");
-            m_webSdrStatusLabel->setStyleSheet("QLabel { color: #4CAF50; }");
-            break;
-
-        case WebSdrController::Error:
-            m_webSdrStatusLabel->setText("Error");
-            m_webSdrStatusLabel->setStyleSheet("QLabel { color: #F44336; }");
-            break;
-    }
+    // No longer showing status label, but we can change combo box style if needed
+    Q_UNUSED(state)
 }
 
 void RadioControlPanel::setFrequencyDisplay(uint64_t frequencyHz)

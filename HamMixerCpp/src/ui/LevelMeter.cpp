@@ -49,26 +49,28 @@ void LevelMeter::reset()
 QSize LevelMeter::sizeHint() const
 {
     int width = m_stereo ? (CHANNEL_WIDTH * 2 + CHANNEL_GAP) : CHANNEL_WIDTH;
-    int height = SEGMENT_COUNT * (SEGMENT_HEIGHT + SEGMENT_GAP) - SEGMENT_GAP;
-    return QSize(width + 4, height + 4);  // Add padding
+    // Use actual height if set, otherwise default
+    int h = height() > 0 ? height() : 130;
+    return QSize(width + 4, h);
 }
 
 QSize LevelMeter::minimumSizeHint() const
 {
-    return sizeHint();
+    int width = m_stereo ? (CHANNEL_WIDTH * 2 + CHANNEL_GAP) : CHANNEL_WIDTH;
+    return QSize(width + 4, 50);  // Minimum height
 }
 
-int LevelMeter::dbToSegment(float db) const
+int LevelMeter::dbToSegment(float db, int totalSegments) const
 {
-    // Map dB to segment index (0 at bottom, SEGMENT_COUNT-1 at top)
+    // Map dB to segment index (0 at bottom, totalSegments-1 at top)
     float normalized = (db - MIN_DB) / (MAX_DB - MIN_DB);
-    return static_cast<int>(normalized * SEGMENT_COUNT);
+    return static_cast<int>(normalized * totalSegments);
 }
 
-QColor LevelMeter::getSegmentColor(int segment) const
+QColor LevelMeter::getSegmentColor(int segment, int totalSegments) const
 {
     // Calculate dB for this segment
-    float db = MIN_DB + (static_cast<float>(segment) / SEGMENT_COUNT) * (MAX_DB - MIN_DB);
+    float db = MIN_DB + (static_cast<float>(segment) / totalSegments) * (MAX_DB - MIN_DB);
 
     if (db >= RED_DB) {
         return m_redColor;
@@ -79,23 +81,41 @@ QColor LevelMeter::getSegmentColor(int segment) const
     }
 }
 
-void LevelMeter::drawChannel(QPainter& painter, int x, int width, float db)
+void LevelMeter::drawChannel(QPainter& painter, int x, int channelWidth, float db)
 {
-    int activeSegments = dbToSegment(db);
+    // Calculate dynamic segment sizing based on available height
+    int availableHeight = height() - 4;  // Subtract padding
+
+    // Calculate segment dimensions to fit the available height
+    // Keep segment gap at 1px for compact look, adjust segment height
+    int segmentGap = 1;
+    int segmentCount = SEGMENT_COUNT;
+
+    // Calculate segment height: (availableHeight - gaps) / segments
+    int totalGaps = segmentCount - 1;
+    int segmentHeight = (availableHeight - totalGaps * segmentGap) / segmentCount;
+
+    // Ensure minimum segment height of 1px
+    if (segmentHeight < 1) {
+        segmentHeight = 1;
+        segmentCount = availableHeight / (segmentHeight + segmentGap);
+    }
+
+    int activeSegments = dbToSegment(db, segmentCount);
     int y = height() - 2;  // Start from bottom
 
-    for (int i = 0; i < SEGMENT_COUNT; i++) {
-        QRect segmentRect(x, y - SEGMENT_HEIGHT, width, SEGMENT_HEIGHT);
+    for (int i = 0; i < segmentCount; i++) {
+        QRect segmentRect(x, y - segmentHeight, channelWidth, segmentHeight);
 
         if (i < activeSegments) {
             // Active segment
-            painter.fillRect(segmentRect, getSegmentColor(i));
+            painter.fillRect(segmentRect, getSegmentColor(i, segmentCount));
         } else {
             // Inactive segment
             painter.fillRect(segmentRect, m_offColor);
         }
 
-        y -= (SEGMENT_HEIGHT + SEGMENT_GAP);
+        y -= (segmentHeight + segmentGap);
     }
 }
 

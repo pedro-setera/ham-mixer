@@ -17,29 +17,49 @@
 #include <QIcon>
 #include <cmath>
 
-WebSdrController::WebSdrController(QObject* parent)
+WebSdrController::WebSdrController(QWidget* parentWidget, QObject* parent)
     : QObject(parent)
     , m_browserWindow(nullptr)
     , m_webView(nullptr)
     , m_state(Unloaded)
     , m_audioStarted(false)
+    , m_embedded(parentWidget != nullptr)
     , m_pendingFrequencyHz(0)
     , m_hasPendingTune(false)
     , m_smeterTimer(nullptr)
     , m_lastSmeterValue(-1)
 {
-    // Create a separate window for the browser
-    m_browserWindow = new QWidget(nullptr, Qt::Window);
-    m_browserWindow->setWindowTitle(QString("%1 V%2 (%3)").arg(HAMMIXER_WEBSDR_NAME).arg(HAMMIXER_VERSION_STRING).arg(HAMMIXER_VERSION_DATE));
-    m_browserWindow->setWindowIcon(QIcon(":/icons/icons/antenna.png"));
-    m_browserWindow->resize(1024, 768);  // Default size
+    if (m_embedded) {
+        // Embedded mode: create web view and add to parent's layout
+        m_webView = new QWebEngineView(parentWidget);
 
-    // Create layout and web view
-    QVBoxLayout* layout = new QVBoxLayout(m_browserWindow);
-    layout->setContentsMargins(0, 0, 0, 0);
+        // Add to parent's layout if it has one
+        QLayout* parentLayout = parentWidget->layout();
+        if (parentLayout) {
+            parentLayout->addWidget(m_webView);
+            qDebug() << "WebSdrController: Created in embedded mode, added to parent layout";
+        } else {
+            qDebug() << "WebSdrController: Created in embedded mode (no parent layout)";
+        }
+    } else {
+        // Separate window mode
+        m_browserWindow = new QWidget(nullptr, Qt::Window);
+        m_browserWindow->setWindowTitle(QString("%1 V%2 (%3)").arg(HAMMIXER_WEBSDR_NAME).arg(HAMMIXER_VERSION_STRING).arg(HAMMIXER_VERSION_DATE));
+        m_browserWindow->setWindowIcon(QIcon(":/icons/icons/antenna.png"));
+        m_browserWindow->resize(1024, 768);  // Default size
 
-    m_webView = new QWebEngineView(m_browserWindow);
-    layout->addWidget(m_webView);
+        // Create layout and web view
+        QVBoxLayout* layout = new QVBoxLayout(m_browserWindow);
+        layout->setContentsMargins(0, 0, 0, 0);
+
+        m_webView = new QWebEngineView(m_browserWindow);
+        layout->addWidget(m_webView);
+
+        // Install event filter to handle window close
+        m_browserWindow->installEventFilter(this);
+
+        qDebug() << "WebSdrController: Created with separate window";
+    }
 
     // Configure web engine settings to allow autoplay without user gesture
     QWebEngineSettings* settings = m_webView->page()->settings();
@@ -56,11 +76,6 @@ WebSdrController::WebSdrController(QObject* parent)
                      this, &WebSdrController::onLoadProgress);
     QObject::connect(m_webView, &QWebEngineView::loadFinished,
                      this, &WebSdrController::onLoadFinished);
-
-    // Install event filter to handle window close
-    m_browserWindow->installEventFilter(this);
-
-    qDebug() << "WebSdrController: Created with separate window";
 }
 
 bool WebSdrController::eventFilter(QObject* obj, QEvent* event)
@@ -80,7 +95,19 @@ WebSdrController::~WebSdrController()
 {
     stopSmeterPolling();
     unload();
-    if (m_browserWindow) {
+
+    if (m_embedded) {
+        // In embedded mode, we need to clean up the webView
+        if (m_webView) {
+            // Remove from parent's layout if present
+            QWidget* parent = m_webView->parentWidget();
+            if (parent && parent->layout()) {
+                parent->layout()->removeWidget(m_webView);
+            }
+            delete m_webView;
+            m_webView = nullptr;
+        }
+    } else if (m_browserWindow) {
         m_browserWindow->close();
         delete m_browserWindow;
         m_browserWindow = nullptr;
@@ -89,7 +116,12 @@ WebSdrController::~WebSdrController()
 
 void WebSdrController::showWindow()
 {
-    if (m_browserWindow) {
+    if (m_embedded) {
+        // In embedded mode, just show the web view
+        if (m_webView) {
+            m_webView->show();
+        }
+    } else if (m_browserWindow) {
         m_browserWindow->show();
         m_browserWindow->raise();
         m_browserWindow->activateWindow();
@@ -98,13 +130,21 @@ void WebSdrController::showWindow()
 
 void WebSdrController::hideWindow()
 {
-    if (m_browserWindow) {
+    if (m_embedded) {
+        // In embedded mode, just hide the web view
+        if (m_webView) {
+            m_webView->hide();
+        }
+    } else if (m_browserWindow) {
         m_browserWindow->hide();
     }
 }
 
 bool WebSdrController::isWindowVisible() const
 {
+    if (m_embedded) {
+        return m_webView && m_webView->isVisible();
+    }
     return m_browserWindow && m_browserWindow->isVisible();
 }
 
@@ -121,8 +161,8 @@ void WebSdrController::loadSite(const WebSdrSite& site)
     m_audioStarted = false;
     m_hasPendingTune = false;
 
-    // Update window title and size
-    if (m_browserWindow) {
+    // Update window title and size (only for separate window mode)
+    if (!m_embedded && m_browserWindow) {
         m_browserWindow->setWindowTitle(QString("%1 V%2 (%3) - %4")
             .arg(HAMMIXER_WEBSDR_NAME)
             .arg(HAMMIXER_VERSION_STRING)
@@ -141,7 +181,7 @@ void WebSdrController::loadSite(const WebSdrSite& site)
     qDebug() << "WebSdrController: Loading site" << site.name << "from" << site.url;
     setState(Loading);
 
-    // Show the window and load the site
+    // Show the window/view and load the site
     showWindow();
     m_webView->load(QUrl(site.url));
 }
@@ -171,8 +211,10 @@ void WebSdrController::unload()
             m_webView->setUrl(QUrl("about:blank"));
         }
 
-        // Hide the window
-        hideWindow();
+        // Hide the window (only in separate window mode)
+        if (!m_embedded) {
+            hideWindow();
+        }
 
         m_currentSite = WebSdrSite();
         m_audioStarted = false;

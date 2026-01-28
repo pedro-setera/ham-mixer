@@ -24,7 +24,12 @@ class WebSdrManager : public QObject
     Q_OBJECT
 
 public:
-    explicit WebSdrManager(QObject* parent = nullptr);
+    /**
+     * Constructor
+     * @param parentWidget If provided, WebSDR browser will be embedded in this widget
+     * @param parent QObject parent
+     */
+    explicit WebSdrManager(QWidget* parentWidget = nullptr, QObject* parent = nullptr);
     ~WebSdrManager();
 
     /**
@@ -32,6 +37,12 @@ public:
      * @param sites List of available sites
      */
     void setSiteList(const QList<WebSdrSite>& sites);
+
+    /**
+     * Pre-initialize the WebEngine to avoid visual glitch on first use.
+     * Call this at startup before loading any site.
+     */
+    void preInitialize();
 
     /**
      * Get list of available sites
@@ -121,6 +132,7 @@ private slots:
 private:
     WebSdrSite findSite(const QString& siteId) const;
 
+    QWidget* m_parentWidget;         // Parent widget for embedded mode
     WebSdrController* m_controller;  // Single controller (only one site at a time)
     QList<WebSdrSite> m_sites;       // Available sites (not all loaded)
     QString m_activeSiteId;

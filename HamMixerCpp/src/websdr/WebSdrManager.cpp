@@ -8,8 +8,9 @@
 #include "WebSdrManager.h"
 #include <QDebug>
 
-WebSdrManager::WebSdrManager(QObject* parent)
+WebSdrManager::WebSdrManager(QWidget* parentWidget, QObject* parent)
     : QObject(parent)
+    , m_parentWidget(parentWidget)
     , m_controller(nullptr)
     , m_lastFrequencyHz(0)
 {
@@ -24,6 +25,32 @@ void WebSdrManager::setSiteList(const QList<WebSdrSite>& sites)
 {
     m_sites = sites;
     qDebug() << "WebSdrManager: Site list set with" << sites.size() << "sites";
+}
+
+void WebSdrManager::preInitialize()
+{
+    // Pre-create the controller to initialize Chromium engine at startup
+    // This avoids the visual blink/glitch that occurs on first WebEngine use
+    if (!m_controller && m_parentWidget) {
+        m_controller = new WebSdrController(m_parentWidget, this);
+
+        // Connect signals
+        connect(m_controller, &WebSdrController::stateChanged,
+                this, &WebSdrManager::onControllerStateChanged);
+        connect(m_controller, &WebSdrController::smeterChanged,
+                this, &WebSdrManager::onControllerSmeterChanged);
+        connect(m_controller, &WebSdrController::pageReady,
+                this, &WebSdrManager::onControllerPageReady);
+        connect(m_controller, &WebSdrController::errorOccurred,
+                this, &WebSdrManager::onControllerError);
+
+        // Load blank page to trigger Chromium initialization
+        if (m_controller->webView()) {
+            m_controller->webView()->load(QUrl("about:blank"));
+        }
+
+        qDebug() << "WebSdrManager: Pre-initialized WebEngine";
+    }
 }
 
 WebSdrSite WebSdrManager::findSite(const QString& siteId) const
@@ -55,21 +82,22 @@ void WebSdrManager::loadSite(const QString& siteId)
 
     qDebug() << "WebSdrManager: Loading site" << site.name << "(" << siteId << ")";
 
-    // Unload current site first (if any)
-    unloadCurrent();
+    // If controller exists and is showing a different site, just load the new site
+    // If no controller, create one (shouldn't happen if preInitialize was called)
+    if (!m_controller) {
+        // Create new controller (pass parent widget for embedded mode)
+        m_controller = new WebSdrController(m_parentWidget, this);
 
-    // Create new controller
-    m_controller = new WebSdrController(this);
-
-    // Connect signals
-    connect(m_controller, &WebSdrController::stateChanged,
-            this, &WebSdrManager::onControllerStateChanged);
-    connect(m_controller, &WebSdrController::smeterChanged,
-            this, &WebSdrManager::onControllerSmeterChanged);
-    connect(m_controller, &WebSdrController::pageReady,
-            this, &WebSdrManager::onControllerPageReady);
-    connect(m_controller, &WebSdrController::errorOccurred,
-            this, &WebSdrManager::onControllerError);
+        // Connect signals
+        connect(m_controller, &WebSdrController::stateChanged,
+                this, &WebSdrManager::onControllerStateChanged);
+        connect(m_controller, &WebSdrController::smeterChanged,
+                this, &WebSdrManager::onControllerSmeterChanged);
+        connect(m_controller, &WebSdrController::pageReady,
+                this, &WebSdrManager::onControllerPageReady);
+        connect(m_controller, &WebSdrController::errorOccurred,
+                this, &WebSdrManager::onControllerError);
+    }
 
     // Store active site ID
     m_activeSiteId = siteId;

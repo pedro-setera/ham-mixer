@@ -74,9 +74,9 @@ private:
     QColor m_bgColor;
 
     // Helper methods
-    int dbToSegment(float db) const;
-    QColor getSegmentColor(int segment) const;
-    void drawChannel(QPainter& painter, int x, int width, float db);
+    int dbToSegment(float db, int totalSegments) const;
+    QColor getSegmentColor(int segment, int totalSegments) const;
+    void drawChannel(QPainter& painter, int x, int channelWidth, float db);
 };
 
 #endif // LEVELMETER_H

@@ -1,7 +1,7 @@
 /*
  * RadioControlPanel.h
  *
- * Compact single-row UI panel for CI-V serial port and WebSDR site controls
+ * Compact single-row UI panel for CI-V serial port, WebSDR site, Radio Info, and Tools
  * Part of HamMixer CT7BAC
  */
 
@@ -13,15 +13,16 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QGroupBox>
+#include <QTimer>
 
 #include "serial/CIVController.h"
 #include "websdr/WebSdrSite.h"
 #include "websdr/WebSdrController.h"
 
 /**
- * @brief Compact panel containing CI-V serial port controls and WebSDR site selector
+ * @brief Compact panel containing CI-V, WebSDR, Radio Info, and Tools sections
  *
- * Layout: [CI-V Connection] | [WebSDR Site] | [Radio Info]
+ * Layout: [CI-V Connection 30%] | [WebSDR 20%] | [Radio Info 25%] | [Tools 25%]
  * All in a single row with minimal height
  */
 class RadioControlPanel : public QWidget
@@ -29,6 +30,14 @@ class RadioControlPanel : public QWidget
     Q_OBJECT
 
 public:
+    // Audio source mode enum (same as TransportControls)
+    enum AudioSourceMode {
+        Both,       // Both channels unmuted
+        RadioOnly,  // WebSDR muted
+        WebSdrOnly  // Radio muted
+    };
+    Q_ENUM(AudioSourceMode)
+
     explicit RadioControlPanel(QWidget* parent = nullptr);
     ~RadioControlPanel() override = default;
 
@@ -54,21 +63,33 @@ public:
     // Refresh available ports
     void refreshPorts();
 
+    // Tools section
+    AudioSourceMode audioSourceMode() const { return m_audioSourceMode; }
+    void setAudioSourceMode(AudioSourceMode mode);
+    void setRecordingActive(bool recording);
+    void setRecordEnabled(bool enabled);
+
 signals:
     void serialConnectClicked();
     void serialDisconnectClicked();
     void portChanged(const QString& port);
     void webSdrSiteChanged(const WebSdrSite& site);
 
+    // Tools signals
+    void audioSourceModeChanged(AudioSourceMode mode);
+    void recordClicked(bool checked);
+
 private slots:
     void onConnectButtonClicked();
     void onPortComboChanged(int index);
     void onSiteComboChanged(int index);
+    void onSourceToggleClicked();
 
 private:
     void setupUI();
     void connectSignals();
     void updateConnectButtonStyle();
+    void updateSourceButtonText();
     QString formatFrequency(uint64_t frequencyHz) const;
 
     // Serial controls
@@ -77,11 +98,19 @@ private:
 
     // WebSDR controls
     QComboBox* m_siteCombo;
-    QLabel* m_webSdrStatusLabel;
 
     // Info display
     QLabel* m_frequencyLabel;
     QLabel* m_modeLabel;
+
+    // Tools controls
+    QPushButton* m_sourceToggleButton;
+    QPushButton* m_recordButton;
+    QLabel* m_recordIndicator;
+    QTimer* m_blinkTimer;
+    AudioSourceMode m_audioSourceMode;
+    bool m_recording;
+    bool m_blinkState;
 
     // State
     bool m_isConnected;
