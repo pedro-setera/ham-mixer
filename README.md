@@ -98,7 +98,7 @@ Audio devices are configured via **File > Audio Devices...** menu, keeping the m
 ## System Architecture
 
 <p align="center">
-  <img src="HamMixerCpp/resources/images/3-Application_layers.jpg" width="350">
+  <img src="HamMixerCpp/resources/images/3-Application_layers.jpg" width="420">
 </p>
 
 ---
@@ -106,7 +106,7 @@ Audio devices are configured via **File > Audio Devices...** menu, keeping the m
 ## Signal Flow
 
 <p align="center">
-  <img src="HamMixerCpp/resources/images/4-Signal_Flow.jpg" width="350">
+  <img src="HamMixerCpp/resources/images/4-Signal_Flow.jpg" width="420">
 </p>
 
 ---
