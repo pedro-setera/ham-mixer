@@ -30,14 +30,6 @@ class RadioControlPanel : public QWidget
     Q_OBJECT
 
 public:
-    // Audio source mode enum (same as TransportControls)
-    enum AudioSourceMode {
-        Both,       // Both channels unmuted
-        RadioOnly,  // WebSDR muted
-        WebSdrOnly  // Radio muted
-    };
-    Q_ENUM(AudioSourceMode)
-
     explicit RadioControlPanel(QWidget* parent = nullptr);
     ~RadioControlPanel() override = default;
 
@@ -65,8 +57,6 @@ public:
     void refreshPorts();
 
     // Tools section
-    AudioSourceMode audioSourceMode() const { return m_audioSourceMode; }
-    void setAudioSourceMode(AudioSourceMode mode);
     void setRecordingActive(bool recording);
     void setRecordEnabled(bool enabled);
 
@@ -77,20 +67,17 @@ signals:
     void webSdrSiteChanged(const WebSdrSite& site);
 
     // Tools signals
-    void audioSourceModeChanged(AudioSourceMode mode);
     void recordClicked(bool checked);
 
 private slots:
     void onConnectButtonClicked();
     void onPortComboChanged(int index);
     void onSiteComboChanged(int index);
-    void onSourceToggleClicked();
 
 private:
     void setupUI();
     void connectSignals();
     void updateConnectButtonStyle();
-    void updateSourceButtonText();
     QString formatFrequency(uint64_t frequencyHz) const;
 
     // Serial controls
@@ -105,11 +92,9 @@ private:
     QLabel* m_modeLabel;
 
     // Tools controls
-    QPushButton* m_sourceToggleButton;
     QPushButton* m_recordButton;
     QLabel* m_recordIndicator;
     QTimer* m_blinkTimer;
-    AudioSourceMode m_audioSourceMode;
     bool m_recording;
     bool m_blinkState;
 

@@ -10,8 +10,8 @@ MixerCore::MixerCore(int sampleRate, int bufferSize)
     : m_sampleRate(sampleRate)
     , m_bufferSize(bufferSize)
 {
-    // Create delay buffer (max 700ms at sample rate)
-    int maxDelaySamples = static_cast<int>(700.0f * sampleRate / 1000.0f);
+    // Create delay buffer (max 2000ms at sample rate for distant KiwiSDR sites)
+    int maxDelaySamples = static_cast<int>(2000.0f * sampleRate / 1000.0f);
     m_delayBuffer = std::make_unique<DelayBuffer>(maxDelaySamples, sampleRate);
 
     // Create audio sync

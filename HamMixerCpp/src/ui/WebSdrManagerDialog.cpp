@@ -1,7 +1,7 @@
 /*
  * WebSdrManagerDialog.cpp
  *
- * Dialog for managing WebSDR sites (Add, Edit, Delete, Reorder)
+ * Dialog for managing SDR sites (WebSDR 2.x and KiwiSDR)
  * Part of HamMixer CT7BAC
  */
 
@@ -13,6 +13,7 @@
 #include <QFormLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QComboBox>
 #include <QMessageBox>
 #include <QUuid>
 #include <QDebug>
@@ -28,7 +29,7 @@ WebSdrManagerDialog::WebSdrManagerDialog(const QList<WebSdrSite>& sites, QWidget
 
 void WebSdrManagerDialog::setupUI()
 {
-    setWindowTitle("Manage WebSDR Sites");
+    setWindowTitle("Manage SDR Sites");
     setMinimumSize(650, 450);
     resize(650, 450);
 
@@ -86,11 +87,12 @@ void WebSdrManagerDialog::setupUI()
     contentLayout->addLayout(buttonLayout);
     mainLayout->addLayout(contentLayout);
 
-    // Info label about WebSDR 2.x compatibility
+    // Info label about supported site types
     QLabel* infoLabel = new QLabel(this);
     infoLabel->setText(
-        "<b>Note:</b> Only WebSDR 2.x sites are supported (software by PA3FWM).<br>"
-        "Visit <a href='http://websdr.org' style='color: #0078D4;'>http://websdr.org</a> for a list of available sites."
+        "<b>Supported SDR Types:</b><br>"
+        "<b>WebSDR 2.x</b> - PA3FWM software (<a href='http://websdr.org' style='color: #5CB3FF;'>websdr.org</a>)<br>"
+        "<b>KiwiSDR</b> - KiwiSDR receivers (<a href='http://rx.kiwisdr.com' style='color: #5CB3FF;'>rx.kiwisdr.com</a>)"
     );
     infoLabel->setOpenExternalLinks(true);
     infoLabel->setWordWrap(true);
@@ -99,10 +101,9 @@ void WebSdrManagerDialog::setupUI()
     );
     mainLayout->addWidget(infoLabel);
 
-    // Dialog buttons (Cancel / Save)
+    // Dialog buttons (Cancel / OK)
     m_buttonBox = new QDialogButtonBox(
-        QDialogButtonBox::Cancel | QDialogButtonBox::Save, this);
-    m_buttonBox->button(QDialogButtonBox::Save)->setText("Save");
+        QDialogButtonBox::Cancel | QDialogButtonBox::Ok, this);
     connect(m_buttonBox, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(m_buttonBox, &QDialogButtonBox::rejected, this, &QDialog::reject);
     mainLayout->addWidget(m_buttonBox);
@@ -125,8 +126,9 @@ void WebSdrManagerDialog::refreshList()
     m_listWidget->clear();
 
     for (const WebSdrSite& site : m_sites) {
-        // Create item with name and URL
-        QString displayText = QString("%1\n%2").arg(site.name, site.url);
+        // Create item with name, type tag, and URL
+        QString typeTag = site.isKiwiSDR() ? "[KiwiSDR]" : "[WebSDR]";
+        QString displayText = QString("%1 %2\n%3").arg(site.name, typeTag, site.effectiveUrl());
         QListWidgetItem* item = new QListWidgetItem(displayText, m_listWidget);
         item->setData(Qt::UserRole, site.id);
     }
@@ -239,28 +241,55 @@ void WebSdrManagerDialog::onDelete()
 bool WebSdrManagerDialog::showSiteDialog(WebSdrSite& site, bool isEdit)
 {
     QDialog dialog(this);
-    dialog.setWindowTitle(isEdit ? "Edit WebSDR Site" : "Add WebSDR Site");
-    dialog.setMinimumWidth(400);
+    dialog.setWindowTitle(isEdit ? "Edit SDR Site" : "Add SDR Site");
+    dialog.setMinimumWidth(450);
 
     QFormLayout* layout = new QFormLayout(&dialog);
     layout->setSpacing(10);
     layout->setContentsMargins(15, 15, 15, 15);
+
+    // Site type selector
+    QComboBox* typeCombo = new QComboBox(&dialog);
+    typeCombo->addItem("WebSDR 2.x", static_cast<int>(SdrSiteType::WebSDR));
+    typeCombo->addItem("KiwiSDR", static_cast<int>(SdrSiteType::KiwiSDR));
+    typeCombo->setCurrentIndex(site.isKiwiSDR() ? 1 : 0);
+    typeCombo->setToolTip("Select the SDR receiver type");
 
     QLineEdit* nameEdit = new QLineEdit(&dialog);
     nameEdit->setText(site.name);
     nameEdit->setPlaceholderText("e.g., Utah US");
 
     QLineEdit* urlEdit = new QLineEdit(&dialog);
-    urlEdit->setText(site.url);
+    urlEdit->setText(site.effectiveUrl());  // Show URL with port if any
     urlEdit->setPlaceholderText("http://example.com:8901");
 
+    // Password field (optional, for protected KiwiSDR)
+    QLineEdit* passwordEdit = new QLineEdit(&dialog);
+    passwordEdit->setText(site.password);
+    passwordEdit->setEchoMode(QLineEdit::Password);
+    passwordEdit->setPlaceholderText("Optional - for protected KiwiSDR sites");
+
+    layout->addRow("Type:", typeCombo);
     layout->addRow("Name:", nameEdit);
     layout->addRow("URL:", urlEdit);
+    layout->addRow("Password:", passwordEdit);
+
+    // Enable/disable KiwiSDR-specific fields based on type
+    auto updateKiwiFields = [passwordEdit](int index) {
+        bool isKiwi = (index == 1);
+        passwordEdit->setEnabled(isKiwi);
+        if (!isKiwi) {
+            passwordEdit->clear();
+        }
+    };
+
+    connect(typeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), updateKiwiFields);
+    updateKiwiFields(typeCombo->currentIndex());
 
     // Info label
     QLabel* hintLabel = new QLabel(
-        "Enter the name as you want it to appear in the dropdown,\n"
-        "and the full URL of the WebSDR 2.x site.",
+        "WebSDR: Enter the full URL including port (e.g., http://sdr.example.com:8901)\n"
+        "KiwiSDR: Enter the full URL including port (e.g., http://kiwi.example.com:8073)",
         &dialog
     );
     hintLabel->setStyleSheet("QLabel { color: #808080; font-size: 10pt; }");
@@ -297,6 +326,9 @@ bool WebSdrManagerDialog::showSiteDialog(WebSdrSite& site, bool isEdit)
 
         site.name = name;
         site.url = url;
+        site.type = static_cast<SdrSiteType>(typeCombo->currentData().toInt());
+        site.port = 0;  // Port is now included in the URL directly
+        site.password = passwordEdit->text();
         return true;
     }
 

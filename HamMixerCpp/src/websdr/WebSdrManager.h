@@ -1,7 +1,7 @@
 /*
  * WebSdrManager.h
  *
- * Manages a single WebSDR controller - only one site loaded at a time
+ * Manages SDR controllers (WebSDR 2.x and KiwiSDR) - only one site loaded at a time
  * Part of HamMixer CT7BAC
  */
 
@@ -11,13 +11,15 @@
 #include <QObject>
 #include <QList>
 #include "WebSdrController.h"
+#include "KiwiSdrController.h"
 #include "WebSdrSite.h"
 
 /**
- * @brief Manages a single WebSDR controller
+ * @brief Manages SDR site controllers (WebSDR 2.x and KiwiSDR)
  *
- * Only one WebSDR site is loaded at a time to minimize CPU usage.
+ * Only one site is loaded at a time to minimize CPU usage.
  * When switching sites, the current site is unloaded before loading the new one.
+ * Supports both WebSDR 2.x and KiwiSDR site types.
  */
 class WebSdrManager : public QObject
 {
@@ -66,14 +68,24 @@ public:
     QString activeSiteId() const { return m_activeSiteId; }
 
     /**
-     * Get active controller
+     * Get active WebSDR controller (nullptr if KiwiSDR is active)
      */
-    WebSdrController* activeController() const { return m_controller; }
+    WebSdrController* activeWebSdrController() const { return m_webSdrController; }
+
+    /**
+     * Get active KiwiSDR controller (nullptr if WebSDR is active)
+     */
+    KiwiSdrController* activeKiwiSdrController() const { return m_kiwiSdrController; }
+
+    /**
+     * Get the active site type
+     */
+    SdrSiteType activeSiteType() const { return m_activeSiteType; }
 
     /**
      * Check if a site is currently loaded
      */
-    bool isLoaded() const { return m_controller != nullptr && m_controller->isReady(); }
+    bool isLoaded() const;
 
     /**
      * Set frequency on active controller
@@ -124,19 +136,30 @@ signals:
     void stateChanged(WebSdrController::State state);
 
 private slots:
-    void onControllerStateChanged(WebSdrController::State state);
-    void onControllerSmeterChanged(int value);
-    void onControllerPageReady();
-    void onControllerError(const QString& error);
+    void onWebSdrStateChanged(WebSdrController::State state);
+    void onWebSdrSmeterChanged(int value);
+    void onWebSdrPageReady();
+    void onWebSdrError(const QString& error);
+
+    void onKiwiSdrStateChanged(KiwiSdrController::State state);
+    void onKiwiSdrSmeterChanged(int value);
+    void onKiwiSdrPageReady();
+    void onKiwiSdrError(const QString& error);
 
 private:
     WebSdrSite findSite(const QString& siteId) const;
+    void connectWebSdrSignals();
+    void connectKiwiSdrSignals();
+    void unloadWebSdr();
+    void unloadKiwiSdr();
 
-    QWidget* m_parentWidget;         // Parent widget for embedded mode
-    WebSdrController* m_controller;  // Single controller (only one site at a time)
-    QList<WebSdrSite> m_sites;       // Available sites (not all loaded)
+    QWidget* m_parentWidget;              // Parent widget for embedded mode
+    WebSdrController* m_webSdrController; // WebSDR 2.x controller
+    KiwiSdrController* m_kiwiSdrController; // KiwiSDR controller
+    QList<WebSdrSite> m_sites;            // Available sites (not all loaded)
     QString m_activeSiteId;
-    uint64_t m_lastFrequencyHz;      // For applying to newly loaded sites
+    SdrSiteType m_activeSiteType;         // Track which type is currently active
+    uint64_t m_lastFrequencyHz;           // For applying to newly loaded sites
     QString m_lastMode;
 };
 

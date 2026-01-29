@@ -7,6 +7,7 @@
 #include <QSlider>
 #include <QLabel>
 #include <QPushButton>
+#include <QMenu>
 #include <memory>
 #include <deque>
 
@@ -42,9 +43,6 @@ private slots:
     void updateMeters();
     void checkSyncResult();
 
-    // Audio source mode (BOTH/RADIO/WEBSDR toggle)
-    void onAudioSourceModeChanged(RadioControlPanel::AudioSourceMode mode);
-
     // CI-V serial connection slots
     void onSerialConnectClicked();
     void onSerialDisconnectClicked();
@@ -62,6 +60,12 @@ private slots:
 
     // Settings dialogs
     void onAudioDevicesClicked();
+
+    // Config file management
+    void onSaveConfig();
+    void onOpenConfig();
+    void onOpenRecentConfig();
+    void updateRecentConfigsMenu();
 
 private:
     // Audio components
@@ -119,6 +123,9 @@ private:
     QTimer* m_meterTimer;
     QTimer* m_syncTimer;
 
+    // Config menu
+    QMenu* m_recentConfigsMenu;
+
     void setupWindow();
     void setupUI();
     void setupMenuBar();
@@ -128,7 +135,6 @@ private:
     void refreshDevices();
     void applyPanningWithMuteOverride();
     void onMuteChanged();
-    void applyAudioSourceMode(RadioControlPanel::AudioSourceMode mode);
 
     // Peak detection and auto-level adjustment before unmuting WebSDR
     void checkAndUnmuteWebSdrChannel(const QString& siteId);

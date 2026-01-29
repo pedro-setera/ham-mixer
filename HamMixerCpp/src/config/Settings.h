@@ -2,6 +2,7 @@
 #define SETTINGS_H
 
 #include <QString>
+#include <QStringList>
 #include <QJsonObject>
 #include <QPoint>
 #include <QSize>
@@ -12,8 +13,8 @@
 /**
  * @brief Application settings manager
  *
- * Handles loading/saving application configuration to JSON file
- * in the user's AppData directory.
+ * Handles loading/saving application configuration to JSON file.
+ * Supports custom config files with save/load dialogs.
  */
 class Settings {
 public:
@@ -68,31 +69,90 @@ public:
     ~Settings() = default;
 
     /**
-     * @brief Load settings from file
+     * @brief Load settings from default config file
      * @return true if successful
      */
     bool load();
 
     /**
-     * @brief Save settings to file
+     * @brief Save settings to default config file
      * @return true if successful
      */
     bool save();
 
     /**
-     * @brief Get config file path
+     * @brief Load settings from a custom file path
+     * @param filePath Path to the config file
+     * @return true if successful
+     */
+    bool loadFromFile(const QString& filePath);
+
+    /**
+     * @brief Save settings to a custom file path
+     * @param filePath Path to save the config file
+     * @return true if successful
+     */
+    bool saveToFile(const QString& filePath);
+
+    /**
+     * @brief Get config file path (default location in AppData)
      */
     static QString getConfigPath();
 
     /**
-     * @brief Get config directory
+     * @brief Get config directory (AppData)
      */
     static QString getConfigDir();
 
     /**
-     * @brief Get default recording directory
+     * @brief Get default recording directory (next to executable)
      */
     static QString getDefaultRecordingDir();
+
+    /**
+     * @brief Get configurations directory (next to executable)
+     */
+    static QString getConfigurationsDir();
+
+    /**
+     * @brief Check if settings have been modified since last save
+     */
+    bool isDirty() const { return m_dirty; }
+
+    /**
+     * @brief Mark settings as dirty (modified)
+     */
+    void markDirty() { m_dirty = true; }
+
+    /**
+     * @brief Clear dirty flag (after save)
+     */
+    void clearDirty() { m_dirty = false; }
+
+    /**
+     * @brief Get the currently loaded config file path
+     */
+    QString currentConfigPath() const { return m_currentConfigPath; }
+
+    /**
+     * @brief Get recent config files list
+     */
+    QStringList recentConfigs() const { return m_recentConfigs; }
+
+    /**
+     * @brief Add a file to the recent configs list
+     */
+    void addRecentConfig(const QString& filePath);
+
+    /**
+     * @brief Save the recent configs list to AppData
+     */
+    void saveRecentConfigs();
+
+    /**
+     * @brief Load the recent configs list from AppData
+     */
+    void loadRecentConfigs();
 
     // Accessors
     DeviceSettings& devices() { return m_devices; }
@@ -134,7 +194,17 @@ private:
     WebSdrSettings m_webSdr;
     QList<WebSdrSite> m_webSdrSites;
 
-    QString m_version = "1.2";
+    QString m_version = "1.3";
+
+    // Dirty flag for tracking unsaved changes
+    bool m_dirty = false;
+
+    // Current config file path (empty = default AppData location)
+    QString m_currentConfigPath;
+
+    // Recent config files list
+    QStringList m_recentConfigs;
+    static constexpr int MAX_RECENT_CONFIGS = 5;
 
     // JSON helpers
     QJsonObject toJson() const;

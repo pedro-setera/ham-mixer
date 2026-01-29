@@ -8,21 +8,21 @@
 /**
  * @brief Circular delay buffer with smooth crossfade transitions.
  *
- * Provides 0-700ms audio delay with click-free transitions when
- * delay value changes during playback.
+ * Provides 0-2000ms audio delay with click-free transitions when
+ * delay value changes during playback. Extended range for distant KiwiSDR sites.
  */
 class DelayBuffer {
 public:
-    static constexpr int MAX_DELAY_MS = 700;
+    static constexpr int MAX_DELAY_MS = 2000;  // Extended for distant KiwiSDR sites
     static constexpr int SAMPLE_RATE = 48000;
     static constexpr int CROSSFADE_MS = 50;
 
     /**
      * @brief Construct a new Delay Buffer
-     * @param maxDelaySamples Maximum delay in samples (default: 700ms at 48kHz)
+     * @param maxDelaySamples Maximum delay in samples (default: 2000ms at 48kHz)
      * @param sampleRate Audio sample rate in Hz
      */
-    DelayBuffer(int maxDelaySamples = 33600, int sampleRate = 48000);
+    DelayBuffer(int maxDelaySamples = 96000, int sampleRate = 48000);
     ~DelayBuffer() = default;
 
     // Non-copyable

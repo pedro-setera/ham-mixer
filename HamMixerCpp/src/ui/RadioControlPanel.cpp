@@ -16,7 +16,6 @@
 RadioControlPanel::RadioControlPanel(QWidget* parent)
     : QWidget(parent)
     , m_isConnected(false)
-    , m_audioSourceMode(Both)
     , m_recording(false)
     , m_blinkState(false)
     , m_radioInfoGroup(nullptr)
@@ -112,12 +111,6 @@ void RadioControlPanel::setupUI()
     toolsLayout->setContentsMargins(10, 5, 10, 5);
     toolsLayout->setSpacing(10);
 
-    // Audio source toggle button (RADIO + WEBSDR / RADIO / WEBSDR)
-    m_sourceToggleButton = new QPushButton("RADIO + WEBSDR", toolsGroup);
-    m_sourceToggleButton->setFixedWidth(150);
-    m_sourceToggleButton->setToolTip("Toggle audio source: RADIO + WEBSDR -> RADIO -> WEBSDR");
-    updateSourceButtonText();
-
     // Record button
     m_recordButton = new QPushButton("REC", toolsGroup);
     m_recordButton->setProperty("buttonType", "record");
@@ -131,7 +124,6 @@ void RadioControlPanel::setupUI()
     m_recordIndicator->setStyleSheet("background-color: transparent; border-radius: 6px;");
     m_recordIndicator->hide();
 
-    toolsLayout->addWidget(m_sourceToggleButton);
     toolsLayout->addWidget(m_recordButton);
     toolsLayout->addWidget(m_recordIndicator);
     toolsLayout->addStretch();
@@ -161,9 +153,6 @@ void RadioControlPanel::connectSignals()
     connect(m_siteCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &RadioControlPanel::onSiteComboChanged);
 
-    connect(m_sourceToggleButton, &QPushButton::clicked,
-            this, &RadioControlPanel::onSourceToggleClicked);
-
     connect(m_recordButton, &QPushButton::clicked,
             this, &RadioControlPanel::recordClicked);
 }
@@ -187,57 +176,6 @@ void RadioControlPanel::onSiteComboChanged(int index)
 {
     if (index >= 0 && index < m_sites.size()) {
         emit webSdrSiteChanged(m_sites[index]);
-    }
-}
-
-void RadioControlPanel::onSourceToggleClicked()
-{
-    // Circular toggle: RADIO + WEBSDR -> RADIO -> WEBSDR
-    switch (m_audioSourceMode) {
-        case Both:
-            m_audioSourceMode = RadioOnly;
-            break;
-        case RadioOnly:
-            m_audioSourceMode = WebSdrOnly;
-            break;
-        case WebSdrOnly:
-            m_audioSourceMode = Both;
-            break;
-    }
-    updateSourceButtonText();
-    emit audioSourceModeChanged(m_audioSourceMode);
-}
-
-void RadioControlPanel::setAudioSourceMode(AudioSourceMode mode)
-{
-    if (m_audioSourceMode != mode) {
-        m_audioSourceMode = mode;
-        updateSourceButtonText();
-        emit audioSourceModeChanged(m_audioSourceMode);
-    }
-}
-
-void RadioControlPanel::updateSourceButtonText()
-{
-    switch (m_audioSourceMode) {
-        case Both:
-            m_sourceToggleButton->setText("RADIO + WEBSDR");
-            m_sourceToggleButton->setStyleSheet("");  // Default style
-            break;
-        case RadioOnly:
-            m_sourceToggleButton->setText("RADIO");
-            m_sourceToggleButton->setStyleSheet(
-                "QPushButton { background-color: #2E7D32; }"
-                "QPushButton:hover { background-color: #388E3C; }"
-            );
-            break;
-        case WebSdrOnly:
-            m_sourceToggleButton->setText("WEBSDR");
-            m_sourceToggleButton->setStyleSheet(
-                "QPushButton { background-color: #1565C0; }"
-                "QPushButton:hover { background-color: #1976D2; }"
-            );
-            break;
     }
 }
 
@@ -309,6 +247,9 @@ WebSdrSite RadioControlPanel::selectedSite() const
 void RadioControlPanel::setSiteList(const QList<WebSdrSite>& sites)
 {
     m_sites = sites;
+
+    // Block signals to prevent triggering site change during programmatic update
+    m_siteCombo->blockSignals(true);
     m_siteCombo->clear();
 
     for (const WebSdrSite& site : sites) {
@@ -318,16 +259,20 @@ void RadioControlPanel::setSiteList(const QList<WebSdrSite>& sites)
     if (!sites.isEmpty()) {
         m_siteCombo->setCurrentIndex(0);
     }
+    m_siteCombo->blockSignals(false);
 }
 
 void RadioControlPanel::setSelectedSite(const QString& siteId)
 {
+    // Block signals to prevent triggering site change during programmatic update
+    m_siteCombo->blockSignals(true);
     for (int i = 0; i < m_sites.size(); i++) {
         if (m_sites[i].id == siteId) {
             m_siteCombo->setCurrentIndex(i);
-            return;
+            break;
         }
     }
+    m_siteCombo->blockSignals(false);
 }
 
 void RadioControlPanel::updateConnectButtonStyle()

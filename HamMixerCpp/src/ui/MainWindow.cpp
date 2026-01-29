@@ -17,6 +17,8 @@
 #include <QIcon>
 #include <QDebug>
 #include <QWebEngineView>
+#include <QFileDialog>
+#include <QDir>
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -24,6 +26,7 @@ MainWindow::MainWindow(QWidget* parent)
     , m_civConnected(false)
     , m_websdrSMeterDb(-80.0f)
     , m_websdrSmeterValid(false)
+    , m_recentConfigsMenu(nullptr)
 {
     // Start S-meter delay timer
     m_smeterTimer.start();
@@ -84,7 +87,7 @@ void MainWindow::setupWindow()
 {
     setWindowTitle(QString("%1 v%2 (%3)").arg(HAMMIXER_APP_NAME).arg(HAMMIXER_VERSION_STRING).arg(HAMMIXER_VERSION_DATE));
     setWindowIcon(QIcon(":/icons/icons/antenna.png"));
-    setMinimumSize(1200, 776);  // Reduced height after moving Audio Devices to dialog
+    setMinimumSize(1200, 876);  // +50px more for KiwiSDR browser room
     resize(m_settings.window().size.width(), m_settings.window().size.height());
     move(m_settings.window().position);
 
@@ -138,18 +141,20 @@ void MainWindow::setupUI()
     delayTopRow->addStretch();
 
     m_delayLabel = new QLabel("300 ms", this);
-    m_delayLabel->setFixedWidth(60);
+    m_delayLabel->setFixedWidth(70);
     m_delayLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    m_delayLabel->setStyleSheet(
+        "QLabel { font-family: 'Consolas'; font-size: 11pt; font-weight: bold; color: #00BCD4; }");
     delayTopRow->addWidget(m_delayLabel);
 
     delayMainLayout->addLayout(delayTopRow);
 
     // Bottom row: Slider (full width)
     m_delaySlider = new QSlider(Qt::Horizontal, this);
-    m_delaySlider->setRange(0, 700);
+    m_delaySlider->setRange(0, 2000);  // Extended for distant KiwiSDR sites (AU/NZ)
     m_delaySlider->setValue(300);
     m_delaySlider->setTickPosition(QSlider::TicksBelow);
-    m_delaySlider->setTickInterval(100);
+    m_delaySlider->setTickInterval(200);  // 10 ticks for 2000ms
     delayMainLayout->addWidget(m_delaySlider);
 
     controlsLayout->addWidget(delayGroup);
@@ -213,14 +218,14 @@ void MainWindow::setupUI()
 
     // ========== Embedded WebSDR Browser (bottom section) ==========
     QGroupBox* browserGroup = new QGroupBox("WebSDR Browser", this);
-    browserGroup->setFixedHeight(350);  // +50px for more webpage room
+    browserGroup->setFixedHeight(450);  // +50px more for KiwiSDR browser room
     browserGroup->setContentsMargins(0, 0, 0, 0);  // Remove group box margins
     QVBoxLayout* browserLayout = new QVBoxLayout(browserGroup);
     browserLayout->setContentsMargins(5, 0, 5, 5);  // Reduced top margin to avoid double spacing
 
     // Create a container widget for the browser with its own layout
     QWidget* browserContainer = new QWidget(browserGroup);
-    browserContainer->setMinimumHeight(260);
+    browserContainer->setMinimumHeight(360);  // +50px more for KiwiSDR
     QVBoxLayout* containerLayout = new QVBoxLayout(browserContainer);
     containerLayout->setContentsMargins(0, 0, 0, 0);
     containerLayout->setSpacing(0);
@@ -242,6 +247,16 @@ void MainWindow::setupUI()
 void MainWindow::setupMenuBar()
 {
     QMenu* fileMenu = menuBar()->addMenu("&File");
+
+    // Config file management
+    fileMenu->addAction("&Open Config...", this, &MainWindow::onOpenConfig, QKeySequence::Open);
+    fileMenu->addAction("&Save Config...", this, &MainWindow::onSaveConfig, QKeySequence::Save);
+
+    // Recent configs submenu
+    m_recentConfigsMenu = fileMenu->addMenu("Open &Recent");
+    updateRecentConfigsMenu();
+
+    fileMenu->addSeparator();
     fileMenu->addAction("Audio &Devices...", this, &MainWindow::onAudioDevicesClicked);
     fileMenu->addAction("Manage &WebSDR...", this, &MainWindow::onManageWebSdr);
     fileMenu->addSeparator();
@@ -256,7 +271,7 @@ void MainWindow::setupMenuBar()
                     "<p>Coding 100% by Claude Code AI.</p>"
                     "<p>Built with C++ and Qt %2.</p>"
                     "<p>Contacts by email: <a href='mailto:ct7bac@gmail.com'>ct7bac@gmail.com</a></p>"
-                    "<p><b>Good DX and 73! 📻</b></p>")
+                    "<p><b>Good DX and 73!</b></p>")
                 .arg(HAMMIXER_VERSION_STRING)
                 .arg(QT_VERSION_STR));
     });
@@ -264,9 +279,7 @@ void MainWindow::setupMenuBar()
 
 void MainWindow::connectSignals()
 {
-    // Tools section - audio source mode toggle and record (now in RadioControlPanel)
-    connect(m_radioControlPanel, &RadioControlPanel::audioSourceModeChanged,
-            this, &MainWindow::onAudioSourceModeChanged);
+    // Tools section - record button (now in RadioControlPanel)
     connect(m_radioControlPanel, &RadioControlPanel::recordClicked,
             this, &MainWindow::onRecordClicked);
 
@@ -285,9 +298,11 @@ void MainWindow::connectSignals()
     // to properly combine slider volume with crossfader position
     connect(m_radioStrip, &ChannelStrip::volumeChanged, this, [this](int) {
         applyPanningWithMuteOverride();
+        m_settings.markDirty();
     });
     connect(m_websdrStrip, &ChannelStrip::volumeChanged, this, [this](int) {
         applyPanningWithMuteOverride();
+        m_settings.markDirty();
     });
 
     // Master controls
@@ -295,11 +310,13 @@ void MainWindow::connectSignals()
         if (m_audioManager->mixer()) {
             m_audioManager->mixer()->setMasterVolume(volume / 100.0f);
         }
+        m_settings.markDirty();
     });
     connect(m_masterStrip, &MasterStrip::muteChanged, this, [this](bool muted) {
         if (m_audioManager->mixer()) {
             m_audioManager->mixer()->setMasterMute(muted);
         }
+        m_settings.markDirty();
     });
 
     // Audio manager signals
@@ -337,6 +354,7 @@ void MainWindow::connectSignals()
 void MainWindow::loadSettings()
 {
     m_settings.load();
+    m_settings.loadRecentConfigs();
 
     // Apply settings
     m_delaySlider->setValue(m_settings.channel1().delayMs);
@@ -359,7 +377,10 @@ void MainWindow::loadSettings()
         m_radioControlPanel->setSelectedPort(m_settings.serial().portName);
     }
 
-    // Apply WebSDR settings - set selected site in dropdown (don't load sites yet)
+    // Apply WebSDR settings - update site list from loaded settings
+    // This is important because setupUI() ran before load() with default sites
+    m_webSdrManager->setSiteList(m_settings.webSdrSites());
+    m_radioControlPanel->setSiteList(m_settings.webSdrSites());
     m_radioControlPanel->setSelectedSite(m_settings.webSdr().selectedSiteId);
 
     // NOTE: WebSDR sites are NOT preloaded at startup anymore
@@ -437,6 +458,8 @@ void MainWindow::onDelayChanged(int value)
     if (m_audioManager->mixer()) {
         m_audioManager->mixer()->setDelayMs(static_cast<float>(value));
     }
+
+    m_settings.markDirty();
 }
 
 void MainWindow::onAutoSyncClicked()
@@ -477,51 +500,6 @@ void MainWindow::onCrossfaderChanged(float radioVol, float radioPan, float websd
     applyPanningWithMuteOverride();
 }
 
-void MainWindow::onAudioSourceModeChanged(RadioControlPanel::AudioSourceMode mode)
-{
-    applyAudioSourceMode(mode);
-}
-
-void MainWindow::applyAudioSourceMode(RadioControlPanel::AudioSourceMode mode)
-{
-    MixerCore* mixer = m_audioManager->mixer();
-
-    switch (mode) {
-        case RadioControlPanel::Both:
-            // Unmute both channels - reset MUTE buttons to disabled (unchecked)
-            m_radioStrip->setMuted(false);
-            m_websdrStrip->setMuted(false);
-            if (mixer) {
-                mixer->setChannel1Mute(false);
-                mixer->setChannel2Mute(false);
-            }
-            break;
-
-        case RadioControlPanel::RadioOnly:
-            // Radio unmuted, WebSDR muted
-            m_radioStrip->setMuted(false);
-            m_websdrStrip->setMuted(true);
-            if (mixer) {
-                mixer->setChannel1Mute(false);
-                mixer->setChannel2Mute(true);
-            }
-            break;
-
-        case RadioControlPanel::WebSdrOnly:
-            // Radio muted, WebSDR unmuted
-            m_radioStrip->setMuted(true);
-            m_websdrStrip->setMuted(false);
-            if (mixer) {
-                mixer->setChannel1Mute(true);
-                mixer->setChannel2Mute(false);
-            }
-            break;
-    }
-
-    // Apply panning with the new mute states
-    applyPanningWithMuteOverride();
-}
-
 void MainWindow::checkAndUnmuteWebSdrChannel(const QString& siteId)
 {
     MixerCore* mixer = m_audioManager->mixer();
@@ -531,7 +509,7 @@ void MainWindow::checkAndUnmuteWebSdrChannel(const QString& siteId)
         m_websdrStrip->setMuted(false);
         mixer = m_audioManager->mixer();
         if (mixer) mixer->setChannel2Mute(false);
-        applyAudioSourceMode(m_radioControlPanel->audioSourceMode());
+        applyPanningWithMuteOverride();
         return;
     }
 
@@ -569,8 +547,8 @@ void MainWindow::checkAndUnmuteWebSdrChannel(const QString& siteId)
     m_websdrStrip->setMuted(false);
     mixer->setChannel2Mute(false);
 
-    // Apply current audio source mode (in case it's not BOTH)
-    applyAudioSourceMode(m_radioControlPanel->audioSourceMode());
+    // Apply panning with the new mute state
+    applyPanningWithMuteOverride();
 
     qDebug() << "MainWindow: Unmuted WebSDR channel after site ready:" << siteId;
 }
@@ -658,8 +636,171 @@ void MainWindow::checkSyncResult()
     }
 }
 
+void MainWindow::onSaveConfig()
+{
+    // Ensure configurations directory exists
+    QString configDir = Settings::getConfigurationsDir();
+    QDir().mkpath(configDir);
+
+    QString fileName = QFileDialog::getSaveFileName(
+        this,
+        "Save Configuration",
+        configDir,
+        "HamMixer Config (*.json);;All Files (*)"
+    );
+
+    if (fileName.isEmpty()) {
+        return;
+    }
+
+    // Ensure .json extension
+    if (!fileName.endsWith(".json", Qt::CaseInsensitive)) {
+        fileName += ".json";
+    }
+
+    // Update current settings before saving
+    saveSettings();
+
+    if (m_settings.saveToFile(fileName)) {
+        updateRecentConfigsMenu();
+        QMessageBox::information(this, "Configuration Saved",
+            QString("Configuration saved to:\n%1").arg(fileName));
+    } else {
+        QMessageBox::warning(this, "Save Failed",
+            QString("Failed to save configuration to:\n%1").arg(fileName));
+    }
+}
+
+void MainWindow::onOpenConfig()
+{
+    // Check for unsaved changes
+    if (m_settings.isDirty()) {
+        QMessageBox::StandardButton reply = QMessageBox::question(
+            this,
+            "Unsaved Changes",
+            "You have unsaved changes. Do you want to save before opening a new configuration?",
+            QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
+            QMessageBox::Save
+        );
+
+        if (reply == QMessageBox::Cancel) {
+            return;
+        }
+        if (reply == QMessageBox::Save) {
+            onSaveConfig();
+        }
+    }
+
+    QString configDir = Settings::getConfigurationsDir();
+    QDir().mkpath(configDir);
+
+    QString fileName = QFileDialog::getOpenFileName(
+        this,
+        "Open Configuration",
+        configDir,
+        "HamMixer Config (*.json);;All Files (*)"
+    );
+
+    if (fileName.isEmpty()) {
+        return;
+    }
+
+    if (m_settings.loadFromFile(fileName)) {
+        // Apply loaded settings to UI
+        loadSettings();
+        updateRecentConfigsMenu();
+        QMessageBox::information(this, "Configuration Loaded",
+            QString("Configuration loaded from:\n%1").arg(fileName));
+    } else {
+        QMessageBox::warning(this, "Load Failed",
+            QString("Failed to load configuration from:\n%1").arg(fileName));
+    }
+}
+
+void MainWindow::onOpenRecentConfig()
+{
+    QAction* action = qobject_cast<QAction*>(sender());
+    if (!action) return;
+
+    QString filePath = action->data().toString();
+    if (filePath.isEmpty()) return;
+
+    // Check for unsaved changes
+    if (m_settings.isDirty()) {
+        QMessageBox::StandardButton reply = QMessageBox::question(
+            this,
+            "Unsaved Changes",
+            "You have unsaved changes. Do you want to save before opening a new configuration?",
+            QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
+            QMessageBox::Save
+        );
+
+        if (reply == QMessageBox::Cancel) {
+            return;
+        }
+        if (reply == QMessageBox::Save) {
+            onSaveConfig();
+        }
+    }
+
+    if (m_settings.loadFromFile(filePath)) {
+        // Apply loaded settings to UI
+        loadSettings();
+        updateRecentConfigsMenu();
+    } else {
+        QMessageBox::warning(this, "Load Failed",
+            QString("Failed to load configuration from:\n%1\n\nThe file may have been moved or deleted.")
+                .arg(filePath));
+        // Remove from recent list since it's invalid
+        m_settings.loadRecentConfigs();  // Reload to remove invalid entries
+        updateRecentConfigsMenu();
+    }
+}
+
+void MainWindow::updateRecentConfigsMenu()
+{
+    m_recentConfigsMenu->clear();
+
+    QStringList recentConfigs = m_settings.recentConfigs();
+
+    if (recentConfigs.isEmpty()) {
+        QAction* noRecent = m_recentConfigsMenu->addAction("(No recent files)");
+        noRecent->setEnabled(false);
+        return;
+    }
+
+    for (const QString& filePath : recentConfigs) {
+        QFileInfo fileInfo(filePath);
+        QString displayName = fileInfo.fileName();
+
+        QAction* action = m_recentConfigsMenu->addAction(displayName);
+        action->setData(filePath);
+        action->setToolTip(filePath);
+        connect(action, &QAction::triggered, this, &MainWindow::onOpenRecentConfig);
+    }
+}
+
 void MainWindow::closeEvent(QCloseEvent* event)
 {
+    // Check for unsaved changes
+    if (m_settings.isDirty()) {
+        QMessageBox::StandardButton reply = QMessageBox::question(
+            this,
+            "Unsaved Changes",
+            "You have unsaved configuration changes.\n\nDo you want to save before closing?",
+            QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
+            QMessageBox::Save
+        );
+
+        if (reply == QMessageBox::Cancel) {
+            event->ignore();
+            return;
+        }
+        if (reply == QMessageBox::Save) {
+            onSaveConfig();
+        }
+    }
+
     // Use the same cleanup sequence as disconnect
     onSerialDisconnectClicked();
 
@@ -672,23 +813,14 @@ void MainWindow::onMuteChanged()
     MixerCore* mixer = m_audioManager->mixer();
     if (!mixer) return;
 
-    RadioControlPanel::AudioSourceMode mode = m_radioControlPanel->audioSourceMode();
-
-    // When a MUTE button is manually clicked, it resets the toggle to BOTH mode
-    // This allows the user to override the toggle state by clicking mute buttons
-    if (mode != RadioControlPanel::Both) {
-        // Reset toggle to BOTH and apply the current mute button states
-        m_radioControlPanel->setAudioSourceMode(RadioControlPanel::Both);
-        // The setAudioSourceMode call will trigger applyAudioSourceMode which handles everything
-        return;
-    }
-
-    // In BOTH mode, apply the mute button states directly
+    // Apply the mute button states directly to the mixer
     mixer->setChannel1Mute(m_radioStrip->isMuted());
     mixer->setChannel2Mute(m_websdrStrip->isMuted());
 
     // Apply panning with mute override
     applyPanningWithMuteOverride();
+
+    m_settings.markDirty();
 }
 
 void MainWindow::applyPanningWithMuteOverride()
@@ -698,14 +830,6 @@ void MainWindow::applyPanningWithMuteOverride()
 
     bool ch1Muted = m_radioStrip->isMuted();
     bool ch2Muted = m_websdrStrip->isMuted();
-
-    // Also consider audio source mode
-    RadioControlPanel::AudioSourceMode mode = m_radioControlPanel->audioSourceMode();
-    if (mode == RadioControlPanel::RadioOnly) {
-        ch2Muted = true;
-    } else if (mode == RadioControlPanel::WebSdrOnly) {
-        ch1Muted = true;
-    }
 
     // Get crossfader values
     float radioVol, radioPan, websdrVol, websdrPan;
@@ -806,16 +930,23 @@ void MainWindow::onSerialConnectClicked()
     // (The signals were consumed by detection lambda, so we need to manually update)
     if (m_radioController->currentFrequency() > 0) {
         m_radioControlPanel->setFrequencyDisplay(m_radioController->currentFrequency());
+        // Also set the frequency in WebSDR manager so it's ready when site loads
+        m_webSdrManager->setFrequency(m_radioController->currentFrequency());
     }
     if (!m_radioController->currentModeName().isEmpty() &&
         m_radioController->currentModeName() != "---") {
         m_radioControlPanel->setModeDisplay(m_radioController->currentModeName());
+        // Also set the mode in WebSDR manager
+        QString webSdrMode = CIVProtocol::modeToWebSdr(m_radioController->currentMode());
+        if (!webSdrMode.isEmpty()) {
+            m_webSdrManager->setMode(webSdrMode);
+        }
     }
     if (!m_radioController->radioModel().isEmpty()) {
         m_radioControlPanel->setRadioModel(m_radioController->radioModel());
     }
 
-    // Step 3: Load WebSDR site
+    // Step 3: Load WebSDR site (m_lastFrequencyHz is now set from above)
     WebSdrSite selectedSite = m_radioControlPanel->selectedSite();
     if (selectedSite.isValid()) {
         m_webSdrManager->loadSite(selectedSite.id);
@@ -852,9 +983,6 @@ void MainWindow::onSerialConnectClicked()
 
             // Apply crossfader settings with mute override
             applyPanningWithMuteOverride();
-
-            // Apply audio source mode
-            applyAudioSourceMode(m_radioControlPanel->audioSourceMode());
 
             // Enable recording
             m_radioControlPanel->setRecordEnabled(true);
@@ -1054,27 +1182,43 @@ void MainWindow::onManageWebSdr()
     if (dialog.exec() == QDialog::Accepted) {
         QList<WebSdrSite> newSites = dialog.sites();
 
-        // Save new site list
+        // Update site list in settings (doesn't save to file yet)
         m_settings.setWebSdrSites(newSites);
+        m_settings.markDirty();  // Mark dirty so user is prompted to save on exit
 
-        // Set first site as the new selected site
-        if (!newSites.isEmpty()) {
-            m_settings.webSdr().selectedSiteId = newSites.first().id;
-        }
-        m_settings.save();
-
-        // Update site list in manager
+        // Update site list in manager (this doesn't reload any site)
         m_webSdrManager->setSiteList(newSites);
 
-        // If connected, reload with first site
-        if (m_civConnected && !newSites.isEmpty()) {
-            m_webSdrManager->loadSite(newSites.first().id);
+        // Update dropdown in RadioControlPanel (signals blocked, won't trigger site change)
+        m_radioControlPanel->setSiteList(newSites);
+
+        // Keep the current selection if it still exists in the list
+        QString currentSiteId = m_settings.webSdr().selectedSiteId;
+        bool currentSiteExists = false;
+        for (const WebSdrSite& site : newSites) {
+            if (site.id == currentSiteId) {
+                currentSiteExists = true;
+                break;
+            }
         }
 
-        // Update dropdown in RadioControlPanel and select first site
-        m_radioControlPanel->setSiteList(newSites);
-        if (!newSites.isEmpty()) {
+        if (currentSiteExists) {
+            // Keep the current site selected (signals blocked)
+            m_radioControlPanel->setSelectedSite(currentSiteId);
+        } else if (!newSites.isEmpty()) {
+            // Current site was deleted, select the first site
+            m_settings.webSdr().selectedSiteId = newSites.first().id;
             m_radioControlPanel->setSelectedSite(newSites.first().id);
+
+            // If connected, we need to load the new site since the old one is gone
+            if (m_civConnected) {
+                // Mute WebSDR channel during site switch
+                m_websdrStrip->setMuted(true);
+                if (m_audioManager->mixer()) {
+                    m_audioManager->mixer()->setChannel2Mute(true);
+                }
+                m_webSdrManager->loadSite(newSites.first().id);
+            }
         }
 
         qDebug() << "WebSDR sites updated:" << newSites.size() << "sites";

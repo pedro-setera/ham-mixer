@@ -1,7 +1,7 @@
 /*
  * WebSdrManagerDialog.h
  *
- * Dialog for managing WebSDR sites (Add, Edit, Delete, Reorder)
+ * Dialog for managing SDR sites (WebSDR 2.x and KiwiSDR)
  * Part of HamMixer CT7BAC
  */
 
@@ -17,10 +17,10 @@
 #include "websdr/WebSdrSite.h"
 
 /**
- * @brief Dialog for managing WebSDR sites
+ * @brief Dialog for managing SDR sites
  *
- * Allows user to add, edit, delete, and reorder WebSDR sites.
- * Includes a note that only WebSDR 2.x sites are supported.
+ * Allows user to add, edit, delete, and reorder SDR sites.
+ * Supports both WebSDR 2.x and KiwiSDR site types.
  */
 class WebSdrManagerDialog : public QDialog
 {

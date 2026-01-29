@@ -102,15 +102,17 @@ set(SERIAL_HEADERS
     src/serial/KenwoodController.h
 )
 
-# WebSDR control sources
+# WebSDR/KiwiSDR control sources
 set(WEBSDR_SOURCES
     src/websdr/WebSdrController.cpp
+    src/websdr/KiwiSdrController.cpp
     src/websdr/WebSdrManager.cpp
 )
 
 set(WEBSDR_HEADERS
     src/websdr/WebSdrSite.h
     src/websdr/WebSdrController.h
+    src/websdr/KiwiSdrController.h
     src/websdr/WebSdrManager.h
 )
 

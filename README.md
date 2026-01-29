@@ -2,15 +2,17 @@
 
 ### Professional Dual-Source Audio Mixer for Ham Radio Operators
 
-**Synchronize your local transceiver with remote WebSDR receivers for enhanced DX monitoring**
+**Synchronize your local transceiver with remote WebSDR and KiwiSDR receivers for enhanced DX monitoring**
 
 ---
 
 ## Overview
 
-HamMixer is a specialized Windows desktop application designed for ham radio operators who want to **simultaneously monitor their local transceiver and remote WebSDR receivers**. It provides real-time audio mixing, automatic frequency synchronization via CAT protocols, and professional-grade DSP processing.
+HamMixer is a specialized Windows desktop application designed for ham radio operators who want to **simultaneously monitor their local transceiver and remote SDR receivers**. It provides real-time audio mixing, automatic frequency synchronization via CAT protocols, and professional-grade DSP processing.
 
 **Multi-brand radio support**: Icom (CI-V), Kenwood, Elecraft, and newer Yaesu radios are all supported with **automatic protocol detection** - just click Connect and HamMixer identifies your radio.
+
+**Dual SDR support**: Works with both **WebSDR 2.x** (PA3FWM software) and **KiwiSDR** receivers worldwide.
 
 Whether you're chasing DX, monitoring propagation, or comparing reception between your station and remote SDRs around the world, HamMixer gives you the tools to do it seamlessly.
 
@@ -24,7 +26,7 @@ Whether you're chasing DX, monitoring propagation, or comparing reception betwee
 
 ### Audio Mixing & Processing
 - **Dual-channel mixer** with independent volume, pan, and mute controls
-- **Real-time crossfader** for smooth transitions between radio and WebSDR audio
+- **Real-time crossfader** for smooth transitions between radio and SDR audio
 - **Low-latency WASAPI audio engine** (~21ms buffer cycles)
 - **Soft-clipping limiter** to prevent audio distortion
 - **WAV recording** of mixed output with automatic file naming
@@ -32,22 +34,30 @@ Whether you're chasing DX, monitoring propagation, or comparing reception betwee
 ### Multi-Brand Radio Integration
 - **Automatic protocol detection** - Click Connect and HamMixer identifies your radio
 - **Icom model detection** - Automatically detects and displays your Icom radio model (IC-7300, IC-705, IC-7610, etc.)
-- **Automatic frequency sync** - WebSDR follows your VFO in real-time
+- **Automatic frequency sync** - SDR follows your VFO in real-time
 - **Mode synchronization** - USB, LSB, CW, AM, FM modes automatically matched
 - **Dual S-Meter display** - Compare signal strength between local and remote
 - **Supported protocols**: Icom CI-V (binary) and Kenwood/Elecraft CAT (ASCII)
 
-### WebSDR Control
-- **Multiple WebSDR sites** - Switch between receivers worldwide
-- **Automatic band selection** - WebSDR changes bands with your radio
-- **Embedded browser** - WebSDR page displayed within the main application
-- **S-Meter extraction** - Real-time signal level from WebSDR
+### SDR Receiver Support
+- **WebSDR 2.x** - Standard WebSDR sites (PA3FWM software)
+- **KiwiSDR** - KiwiSDR receivers with real-time frequency control
+- **Multiple sites** - Switch between receivers worldwide
+- **Automatic band selection** - SDR changes bands with your radio
+- **Embedded browser** - SDR waterfall displayed within the main application
+- **S-Meter extraction** - Real-time signal level from SDR
 
 ### Time Synchronization
 - **GCC-PHAT algorithm** - Professional-grade delay detection
 - **Auto-sync button** - Automatically align audio streams (2-second capture)
-- **Manual delay control** - 0-700ms adjustable delay
+- **Manual delay control** - 0-2000ms adjustable delay for distant SDR sites
 - **Compensates for internet latency** between local and remote audio
+
+### Configuration Management
+- **Save/Load configurations** - Save your complete setup to custom config files
+- **Recent configs** - Quick access to recently used configurations
+- **Auto-save on exit** - Settings preserved between sessions
+- **Configurations folder** - Organized storage next to executable
 
 ---
 
@@ -73,6 +83,34 @@ Detection takes 1-2 seconds. A successful connection shows the frequency display
 
 ---
 
+## Supported SDR Sites
+
+HamMixer works with two types of SDR receivers:
+
+### WebSDR 2.x
+Standard WebSDR sites running PA3FWM's WebSDR software. Find sites at [websdr.org](http://websdr.org).
+
+Pre-configured sites include:
+- **Maasbree, Netherlands** - Excellent HF coverage
+- **Utah, USA** - 160m-40m bands
+- **Bordeaux, France** - European coverage
+- **Pardinho, Brazil** - South American coverage
+- And many more...
+
+### KiwiSDR
+KiwiSDR receivers provide excellent audio quality and real-time frequency control. Find sites at [rx.kiwisdr.com](http://rx.kiwisdr.com).
+
+KiwiSDR features:
+- **Real-time frequency sync** - Follows your radio dial instantly
+- **Mode synchronization** - USB, LSB, CW, AM modes supported
+- **Waterfall display** - Visual spectrum in embedded browser
+- **Variable ports** - Supports custom ports (8073, 8074, etc.)
+- **Password protection** - For protected KiwiSDR sites
+
+You can add custom SDR sites through **File > Manage WebSDR...** menu.
+
+---
+
 ## User Interface Layout
 
 <p align="center">
@@ -81,17 +119,22 @@ Detection takes 1-2 seconds. A successful connection shows the frequency display
 
 ### Top Row Sections (Left to Right)
 - **Radio Connection (30%)**: COM port selection and Connect/Disconnect button (auto-detects protocol)
-- **WebSDR (20%)**: Site selector dropdown
+- **WebSDR (20%)**: Site selector dropdown (WebSDR and KiwiSDR sites)
 - **Radio Info (25%)**: Current frequency and mode display; shows detected Icom model (e.g., "Radio Info - IC-7300")
-- **Tools (25%)**: BOTH/RADIO/WEBSDR toggle and REC button with indicator
+- **Tools (25%)**: REC button with recording indicator
 
 ### Controls Row
-- **Delay/Crossfader**: Time sync controls and audio balance
+- **Delay/Crossfader**: Time sync controls (0-2000ms) and audio balance
 - **S-Meters**: Stacked vertically - Radio on top, WebSDR below
 - **Levels**: Channel strips with volume sliders, LED meters, and mute buttons
 
 ### Audio Device Configuration
 Audio devices are configured via **File > Audio Devices...** menu, keeping the main window clean and focused.
+
+### Configuration Management
+- **File > Open Config...** - Load a saved configuration
+- **File > Save Config...** - Save current configuration to file
+- **File > Open Recent** - Quick access to recent configurations
 
 ---
 
@@ -123,7 +166,7 @@ Audio devices are configured via **File > Audio Devices...** menu, keeping the m
 - **Visual C++ Redistributable 2022** ([Download](https://aka.ms/vs/17/release/vc_redist.x64.exe))
 
 ### Recommended Audio Setup
-For best results, use **VB-Cable** (virtual audio cable) to route WebSDR audio:
+For best results, use **VB-Cable** (virtual audio cable) to route SDR audio:
 1. Set browser audio output to VB-Cable
 2. Select VB-Cable as WebSDR input in HamMixer
 
@@ -177,20 +220,27 @@ build.bat
 - Click **Connect** - HamMixer auto-detects your radio's protocol
 - For Icom radios, the model name will appear in the title (e.g., "Radio Info - IC-7300")
 - Frequency display should show your VFO within 1-2 seconds
-- WebSDR page will load automatically in the embedded browser
+- SDR page will load automatically in the embedded browser
 
-### 4. Select WebSDR Site
-- Choose a WebSDR from the dropdown (or add custom sites via File menu)
-- The WebSDR will automatically tune to your radio's frequency
+### 4. Select SDR Site
+- Choose a WebSDR or KiwiSDR from the dropdown
+- Add custom sites via **File > Manage WebSDR...**
+- The SDR will automatically tune to your radio's frequency
 
 ### 5. Adjust Mix
 - Use **channel sliders** for individual volume control
-- Use **crossfader** to blend between radio and WebSDR
-- Use **BOTH/RADIO/WEBSDR** toggle for quick switching
+- Use **crossfader** to blend between radio and SDR
+- Use **MUTE buttons** on each channel for quick switching
 
 ### 6. Synchronize Audio
 - Click **Auto-Sync** to automatically detect and compensate for delay
 - Or manually adjust the delay slider until audio aligns
+- Range: 0-2000ms (supports distant KiwiSDR sites like Australia/New Zealand)
+
+### 7. Save Your Configuration
+- Use **File > Save Config...** to save your setup
+- Configurations are stored in the `configurations` folder
+- Use **File > Open Recent** for quick access to saved configs
 
 ---
 
@@ -202,19 +252,7 @@ build.bat
 | Bit Depth | 16-bit signed | Standard PCM |
 | Channels | Stereo | Dual mono mixed to stereo |
 | Buffer Size | 1024 samples | ~21ms latency |
-| Delay Range | 0-700ms | Compensates internet latency |
-
----
-
-## Supported WebSDR Sites
-
-HamMixer works with standard WebSDR 2.x sites. Pre-configured sites include:
-- **Maasbree, Netherlands** - Excellent HF coverage
-- **Utah, USA** - 160m-40m bands
-- **Twente, Netherlands** - Wide frequency coverage
-- And many more...
-
-You can add custom WebSDR sites through **File > Manage WebSDR...** menu.
+| Delay Range | 0-2000ms | Extended for distant SDR sites |
 
 ---
 
@@ -224,10 +262,10 @@ You can add custom WebSDR sites through **File > Manage WebSDR...** menu.
 - Check Windows sound settings - ensure radio USB audio is not muted
 - Verify correct input device selected in HamMixer
 
-### WebSDR not following frequency
+### SDR not following frequency
 - Ensure radio is connected (green indicator)
-- Check that WebSDR site supports the current band
-- Some WebSDRs have limited band coverage
+- Check that SDR site supports the current band
+- Some SDRs have limited band coverage
 
 ### Radio not detected
 - Ensure radio is powered on and connected via USB
@@ -239,10 +277,15 @@ You can add custom WebSDR sites through **File > Manage WebSDR...** menu.
 ### Audio out of sync
 - Click **Auto-Sync** button during voice transmission
 - Manually adjust delay slider if auto-sync fails
-- Typical internet delay is 200-400ms
+- Typical internet delay: 200-500ms for WebSDR, 1000-1500ms for distant KiwiSDR
+
+### KiwiSDR high latency
+- KiwiSDR sites may have 1-2 second delay due to audio buffering
+- Use the extended delay range (up to 2000ms) to compensate
+- Try different KiwiSDR sites for lower latency
 
 ### High CPU usage
-- WebSDR browser rendering can be CPU-intensive
+- SDR browser rendering can be CPU-intensive
 - Close unnecessary browser tabs/applications
 
 ---
@@ -277,6 +320,7 @@ This project is provided as-is for the amateur radio community. See [LICENSE](LI
 ## Acknowledgments
 
 - **PA3FWM** - Creator of WebSDR
+- **KiwiSDR Team** - For the excellent KiwiSDR platform
 - **Icom** - For the CI-V protocol documentation
 - **Kenwood** - For the CAT protocol documentation
 - **Elecraft** - For K-series programmer's reference

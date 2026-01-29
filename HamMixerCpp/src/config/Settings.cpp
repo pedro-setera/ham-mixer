@@ -49,6 +49,12 @@ QString Settings::getDefaultRecordingDir()
     return QCoreApplication::applicationDirPath() + "/recordings";
 }
 
+QString Settings::getConfigurationsDir()
+{
+    // Use executable directory for configurations folder
+    return QCoreApplication::applicationDirPath() + "/configurations";
+}
+
 bool Settings::load()
 {
     QString path = getConfigPath();
@@ -95,8 +101,133 @@ bool Settings::save()
     file.write(doc.toJson(QJsonDocument::Indented));
     file.close();
 
+    // Note: Don't clear dirty flag here - that's for custom config tracking
+    // The dirty flag is only cleared when saving to a custom config file
     qDebug() << "Settings saved to:" << path;
     return true;
+}
+
+bool Settings::loadFromFile(const QString& filePath)
+{
+    QFile file(filePath);
+
+    if (!file.exists()) {
+        qWarning() << "Config file does not exist:" << filePath;
+        return false;
+    }
+
+    if (!file.open(QIODevice::ReadOnly)) {
+        qWarning() << "Failed to open config file:" << filePath;
+        return false;
+    }
+
+    QByteArray data = file.readAll();
+    file.close();
+
+    QJsonDocument doc = QJsonDocument::fromJson(data);
+    if (doc.isNull() || !doc.isObject()) {
+        qWarning() << "Invalid config file format:" << filePath;
+        return false;
+    }
+
+    fromJson(doc.object());
+    m_currentConfigPath = filePath;
+    m_dirty = false;
+    addRecentConfig(filePath);
+    qDebug() << "Settings loaded from:" << filePath;
+    return true;
+}
+
+bool Settings::saveToFile(const QString& filePath)
+{
+    // Ensure the directory exists
+    QFileInfo fileInfo(filePath);
+    QDir().mkpath(fileInfo.absolutePath());
+
+    QFile file(filePath);
+
+    if (!file.open(QIODevice::WriteOnly)) {
+        qWarning() << "Failed to save config file:" << filePath;
+        return false;
+    }
+
+    QJsonDocument doc(toJson());
+    file.write(doc.toJson(QJsonDocument::Indented));
+    file.close();
+
+    m_currentConfigPath = filePath;
+    m_dirty = false;
+    addRecentConfig(filePath);
+    qDebug() << "Settings saved to:" << filePath;
+    return true;
+}
+
+void Settings::addRecentConfig(const QString& filePath)
+{
+    // Remove if already in list
+    m_recentConfigs.removeAll(filePath);
+
+    // Add to front
+    m_recentConfigs.prepend(filePath);
+
+    // Limit list size
+    while (m_recentConfigs.size() > MAX_RECENT_CONFIGS) {
+        m_recentConfigs.removeLast();
+    }
+
+    saveRecentConfigs();
+}
+
+void Settings::saveRecentConfigs()
+{
+    QString dir = getConfigDir();
+    QDir().mkpath(dir);
+
+    QString path = dir + "/recent_configs.json";
+    QFile file(path);
+
+    if (!file.open(QIODevice::WriteOnly)) {
+        qWarning() << "Failed to save recent configs:" << path;
+        return;
+    }
+
+    QJsonObject root;
+    QJsonArray arr;
+    for (const QString& config : m_recentConfigs) {
+        arr.append(config);
+    }
+    root["recent"] = arr;
+
+    QJsonDocument doc(root);
+    file.write(doc.toJson(QJsonDocument::Indented));
+    file.close();
+}
+
+void Settings::loadRecentConfigs()
+{
+    QString path = getConfigDir() + "/recent_configs.json";
+    QFile file(path);
+
+    if (!file.exists() || !file.open(QIODevice::ReadOnly)) {
+        return;
+    }
+
+    QByteArray data = file.readAll();
+    file.close();
+
+    QJsonDocument doc = QJsonDocument::fromJson(data);
+    if (doc.isNull() || !doc.isObject()) {
+        return;
+    }
+
+    QJsonArray arr = doc.object()["recent"].toArray();
+    m_recentConfigs.clear();
+    for (const QJsonValue& val : arr) {
+        QString path = val.toString();
+        if (QFile::exists(path)) {
+            m_recentConfigs.append(path);
+        }
+    }
 }
 
 QJsonObject Settings::toJson() const
