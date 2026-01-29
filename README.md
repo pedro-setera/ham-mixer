@@ -119,22 +119,19 @@ You can add custom SDR sites through **File > Manage WebSDR...** menu.
 
 ### Top Row Sections (Left to Right)
 - **Radio Connection (30%)**: COM port selection and Connect/Disconnect button (auto-detects protocol)
-- **WebSDR (20%)**: Site selector dropdown (WebSDR and KiwiSDR sites)
+- **WebSDR (32%)**: Site selector dropdown with cogwheel button for quick access to site manager
 - **Radio Info (25%)**: Current frequency and mode display; shows detected Icom model (e.g., "Radio Info - IC-7300")
-- **Tools (25%)**: REC button with recording indicator
+- **Tools (13%)**: REC button with recording indicator
 
 ### Controls Row
 - **Delay/Crossfader**: Time sync controls (0-2000ms) and audio balance
 - **S-Meters**: Stacked vertically - Radio on top, WebSDR below
 - **Levels**: Channel strips with volume sliders, LED meters, and mute buttons
 
-### Audio Device Configuration
-Audio devices are configured via **File > Audio Devices...** menu, keeping the main window clean and focused.
-
-### Configuration Management
-- **File > Open Config...** - Load a saved configuration
-- **File > Save Config...** - Save current configuration to file
-- **File > Open Recent** - Quick access to recent configurations
+### Menu Structure
+- **File**: Open Config, Save Config, Open Recent, Exit
+- **Tools**: Audio Devices, Manage SDR Sites
+- **Help**: About
 
 ---
 

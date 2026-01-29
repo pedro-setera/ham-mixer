@@ -22,7 +22,7 @@
 /**
  * @brief Compact panel containing CI-V, WebSDR, Radio Info, and Tools sections
  *
- * Layout: [CI-V Connection 30%] | [WebSDR 20%] | [Radio Info 25%] | [Tools 25%]
+ * Layout: [CI-V Connection 30%] | [WebSDR 32%] | [Radio Info 25%] | [Tools 13%]
  * All in a single row with minimal height
  */
 class RadioControlPanel : public QWidget
@@ -65,6 +65,7 @@ signals:
     void serialDisconnectClicked();
     void portChanged(const QString& port);
     void webSdrSiteChanged(const WebSdrSite& site);
+    void manageSitesClicked();
 
     // Tools signals
     void recordClicked(bool checked);
@@ -86,6 +87,7 @@ private:
 
     // WebSDR controls
     QComboBox* m_siteCombo;
+    QPushButton* m_manageButton;
 
     // Info display
     QLabel* m_frequencyLabel;

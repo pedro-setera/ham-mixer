@@ -33,7 +33,7 @@ RadioControlPanel::RadioControlPanel(QWidget* parent)
 void RadioControlPanel::setupUI()
 {
     // Main horizontal layout - single row with specific proportions
-    // CI-V 30%, WebSDR 20%, Radio Info 25%, Tools 25%
+    // CI-V 30%, WebSDR 32%, Radio Info 25%, Tools 13%
     QHBoxLayout* mainLayout = new QHBoxLayout(this);
     mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(10);
@@ -62,7 +62,7 @@ void RadioControlPanel::setupUI()
 
     mainLayout->addWidget(serialGroup, 30);
 
-    // ===== WebSDR Site Section (20%) =====
+    // ===== WebSDR Site Section (32%) =====
     QGroupBox* webSdrGroup = new QGroupBox("WebSDR", this);
     QHBoxLayout* webSdrLayout = new QHBoxLayout(webSdrGroup);
     webSdrLayout->setContentsMargins(10, 5, 10, 5);
@@ -72,12 +72,29 @@ void RadioControlPanel::setupUI()
     m_siteCombo = new QComboBox(webSdrGroup);
     m_siteCombo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     m_siteCombo->setStyleSheet("QComboBox { min-width: 80px; }");
-    m_siteCombo->setToolTip("Select WebSDR site to use");
+    m_siteCombo->setToolTip("Select WebSDR or KiwiSDR site to use");
+
+    // Cogwheel button to open site manager
+    m_manageButton = new QPushButton(webSdrGroup);
+    m_manageButton->setFixedSize(28, 28);
+    m_manageButton->setToolTip("Manage SDR sites");
+    m_manageButton->setStyleSheet(
+        "QPushButton { "
+        "  background-color: #3C3C3C; "
+        "  border: 1px solid #555555; "
+        "  border-radius: 4px; "
+        "  font-size: 14px; "
+        "}"
+        "QPushButton:hover { background-color: #4A4A4A; }"
+        "QPushButton:pressed { background-color: #2A2A2A; }"
+    );
+    m_manageButton->setText(QString::fromUtf8("\u2699"));  // Unicode cogwheel
 
     webSdrLayout->addWidget(siteLabel);
     webSdrLayout->addWidget(m_siteCombo, 1);
+    webSdrLayout->addWidget(m_manageButton);
 
-    mainLayout->addWidget(webSdrGroup, 20);
+    mainLayout->addWidget(webSdrGroup, 32);
 
     // ===== Radio Info Section (25%) =====
     m_radioInfoGroup = new QGroupBox("Radio Info", this);
@@ -105,7 +122,7 @@ void RadioControlPanel::setupUI()
 
     mainLayout->addWidget(m_radioInfoGroup, 25);
 
-    // ===== Tools Section (25%) =====
+    // ===== Tools Section (13%) =====
     QGroupBox* toolsGroup = new QGroupBox("Tools", this);
     QHBoxLayout* toolsLayout = new QHBoxLayout(toolsGroup);
     toolsLayout->setContentsMargins(10, 5, 10, 5);
@@ -128,7 +145,7 @@ void RadioControlPanel::setupUI()
     toolsLayout->addWidget(m_recordIndicator);
     toolsLayout->addStretch();
 
-    mainLayout->addWidget(toolsGroup, 25);
+    mainLayout->addWidget(toolsGroup, 13);
 
     // Blink timer for recording indicator
     m_blinkTimer = new QTimer(this);
@@ -155,6 +172,9 @@ void RadioControlPanel::connectSignals()
 
     connect(m_recordButton, &QPushButton::clicked,
             this, &RadioControlPanel::recordClicked);
+
+    connect(m_manageButton, &QPushButton::clicked,
+            this, &RadioControlPanel::manageSitesClicked);
 }
 
 void RadioControlPanel::onConnectButtonClicked()

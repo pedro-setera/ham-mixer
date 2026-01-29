@@ -246,22 +246,25 @@ void MainWindow::setupUI()
 
 void MainWindow::setupMenuBar()
 {
+    // ===== File Menu =====
     QMenu* fileMenu = menuBar()->addMenu("&File");
 
-    // Config file management
     fileMenu->addAction("&Open Config...", this, &MainWindow::onOpenConfig, QKeySequence::Open);
     fileMenu->addAction("&Save Config...", this, &MainWindow::onSaveConfig, QKeySequence::Save);
 
-    // Recent configs submenu
     m_recentConfigsMenu = fileMenu->addMenu("Open &Recent");
     updateRecentConfigsMenu();
 
     fileMenu->addSeparator();
-    fileMenu->addAction("Audio &Devices...", this, &MainWindow::onAudioDevicesClicked);
-    fileMenu->addAction("Manage &WebSDR...", this, &MainWindow::onManageWebSdr);
-    fileMenu->addSeparator();
     fileMenu->addAction("E&xit", this, &QMainWindow::close, QKeySequence::Quit);
 
+    // ===== Tools Menu =====
+    QMenu* toolsMenu = menuBar()->addMenu("&Tools");
+
+    toolsMenu->addAction("&Audio Devices...", this, &MainWindow::onAudioDevicesClicked);
+    toolsMenu->addAction("Manage &SDR Sites...", this, &MainWindow::onManageWebSdr);
+
+    // ===== Help Menu =====
     QMenu* helpMenu = menuBar()->addMenu("&Help");
     helpMenu->addAction("&About", this, [this]() {
         QMessageBox::about(this, "About HamMixer",
@@ -334,6 +337,8 @@ void MainWindow::connectSignals()
     // ========== WebSDR Manager signals ==========
     connect(m_radioControlPanel, &RadioControlPanel::webSdrSiteChanged,
             this, &MainWindow::onWebSdrSiteChanged);
+    connect(m_radioControlPanel, &RadioControlPanel::manageSitesClicked,
+            this, &MainWindow::onManageWebSdr);
 
     connect(m_webSdrManager, &WebSdrManager::stateChanged,
             this, &MainWindow::onWebSdrStateChanged);
