@@ -98,7 +98,7 @@ Audio devices are configured via **File > Audio Devices...** menu, keeping the m
 ## System Architecture
 
 <p align="center">
-  <img src="HamMixerCpp/resources/images/3-Application_layers.jpg" width="700">
+  <img src="HamMixerCpp/resources/images/3-Application_layers.jpg" width="350">
 </p>
 
 ---
@@ -106,7 +106,7 @@ Audio devices are configured via **File > Audio Devices...** menu, keeping the m
 ## Signal Flow
 
 <p align="center">
-  <img src="HamMixerCpp/resources/images/4-Signal_Flow.jpg" width="700">
+  <img src="HamMixerCpp/resources/images/4-Signal_Flow.jpg" width="350">
 </p>
 
 ---
@@ -284,6 +284,10 @@ This project is provided as-is for the amateur radio community. See [LICENSE](LI
 - **Amateur Radio Community** - For inspiration and testing
 
 ---
+
+<p align="center">
+  <img src="HamMixerCpp/resources/images/CT7BAC.jpg" width="350">
+</p>
 
 <p align="center">
   <i>73 de CT7BAC</i>
