@@ -6,6 +6,7 @@
  */
 
 #include "RadioControlPanel.h"
+#include "serial/CIVController.h"  // For static availablePorts()
 #include "Styles.h"
 #include <QHBoxLayout>
 #include <QVBoxLayout>
@@ -347,25 +348,25 @@ void RadioControlPanel::updateConnectButtonStyle()
     }
 }
 
-void RadioControlPanel::setSerialConnectionState(CIVController::ConnectionState state)
+void RadioControlPanel::setSerialConnectionState(RadioController::ConnectionState state)
 {
     switch (state) {
-        case CIVController::Disconnected:
+        case RadioController::Disconnected:
             m_isConnected = false;
             m_portCombo->setEnabled(true);
             break;
 
-        case CIVController::Connecting:
+        case RadioController::Connecting:
             // Keep current state, button shows "..."
             m_connectButton->setText("...");
             return;
 
-        case CIVController::Connected:
+        case RadioController::Connected:
             m_isConnected = true;
             m_portCombo->setEnabled(false);
             break;
 
-        case CIVController::Error:
+        case RadioController::Error:
             m_isConnected = false;
             m_portCombo->setEnabled(true);
             break;

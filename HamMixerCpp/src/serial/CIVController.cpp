@@ -10,7 +10,7 @@
 #include <QDebug>
 
 CIVController::CIVController(QObject* parent)
-    : QObject(parent)
+    : RadioController(parent)
     , m_serialPort(nullptr)
     , m_pollTimer(nullptr)
     , m_state(Disconnected)

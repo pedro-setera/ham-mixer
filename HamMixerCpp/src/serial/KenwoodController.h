@@ -1,52 +1,43 @@
 /*
- * CIVController.h
+ * KenwoodController.h
  *
- * CI-V Serial Communication Controller for Icom radios
+ * ASCII CAT Protocol Controller for Kenwood, Elecraft, and newer Yaesu radios
  * Part of HamMixer CT7BAC
  */
 
-#ifndef CIVCONTROLLER_H
-#define CIVCONTROLLER_H
+#ifndef KENWOODCONTROLLER_H
+#define KENWOODCONTROLLER_H
 
 #include "RadioController.h"
 #include <QSerialPort>
 #include <QSerialPortInfo>
 #include <QTimer>
 #include <QByteArray>
-#include <QString>
-#include <QStringList>
 
-class CIVController : public RadioController
+class KenwoodController : public RadioController
 {
     Q_OBJECT
 
 public:
-    explicit CIVController(QObject* parent = nullptr);
-    ~CIVController();
+    explicit KenwoodController(QObject* parent = nullptr);
+    ~KenwoodController();
 
     // RadioController interface implementation
-    bool connect(const QString& portName, int baudRate = 57600) override;
+    bool connect(const QString& port, int baudRate) override;
     void disconnect() override;
+    bool isConnected() const override { return m_state == Connected; }
     ConnectionState state() const override { return m_state; }
     QString lastError() const override { return m_lastError; }
-    bool isConnected() const override { return m_state == Connected; }
-    Protocol protocol() const override { return IcomCIV; }
+    Protocol protocol() const override { return KenwoodCAT; }
 
-    // Port enumeration (static, not part of interface)
-    static QStringList availablePorts();
-    static QList<QSerialPortInfo> availablePortsInfo();
-
-    // Polling control
-    void startPolling(int intervalMs = 100) override;
+    void startPolling(int intervalMs) override;
     void stopPolling() override;
     bool isPolling() const override { return m_pollTimer && m_pollTimer->isActive(); }
 
-    // Manual queries (results come via signals)
     void requestFrequency() override;
     void requestMode() override;
     void requestSMeter() override;
 
-    // Current values (cached from last poll)
     uint64_t currentFrequency() const override { return m_currentFrequencyHz; }
     uint8_t currentMode() const override { return m_currentMode; }
     QString currentModeName() const override { return m_currentModeName; }
@@ -60,13 +51,13 @@ private slots:
 private:
     void setState(ConnectionState newState);
     void setError(const QString& error);
-    void processFrame(const QByteArray& frame);
-    void sendCommand(const QByteArray& data);
-    bool extractFrames();  // Extract complete frames from buffer
+    void sendCommand(const QString& cmd);
+    void processResponse(const QString& response);
+    QString modeToString(int mode);
 
     QSerialPort* m_serialPort;
     QTimer* m_pollTimer;
-    QByteArray m_rxBuffer;
+    QString m_rxBuffer;
     ConnectionState m_state;
     QString m_lastError;
 
@@ -77,7 +68,7 @@ private:
     int m_currentSMeter;
 
     // Polling state machine
-    int m_pollPhase;  // 0=freq, 1=mode, 2=smeter
+    int m_pollPhase;
 };
 
-#endif // CIVCONTROLLER_H
+#endif // KENWOODCONTROLLER_H

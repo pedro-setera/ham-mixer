@@ -8,20 +8,22 @@
 
 ## Overview
 
-HamMixer is a specialized Windows desktop application designed for ham radio operators who want to **simultaneously monitor their local transceiver and remote WebSDR receivers**. It provides real-time audio mixing, automatic frequency synchronization via CI-V protocol, and professional-grade DSP processing.
+HamMixer is a specialized Windows desktop application designed for ham radio operators who want to **simultaneously monitor their local transceiver and remote WebSDR receivers**. It provides real-time audio mixing, automatic frequency synchronization via CAT protocols, and professional-grade DSP processing.
+
+**Multi-brand radio support**: Icom (CI-V), Kenwood, Elecraft, and newer Yaesu radios are all supported with **automatic protocol detection** - just click Connect and HamMixer identifies your radio.
 
 Whether you're chasing DX, monitoring propagation, or comparing reception between your station and remote SDRs around the world, HamMixer gives you the tools to do it seamlessly.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                           HamMixer CT7BAC v1.4                              │
-│                    IC-7300 + WebSDR Dual Audio Mixer                        │
+│                    Multi-Brand Radio + WebSDR Dual Audio Mixer              │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │   ┌─────────────┐              ┌──────────────┐              ┌───────────┐  │
-│   │  IC-7300    │──── CI-V ───▶│              │              │  WebSDR   │  │
-│   │  (or other  │              │   HamMixer   │◀── HTTP ────│  Sites    │  │
-│   │  Icom rig)  │──── Audio ──▶│              │              │  (World)  │  │
+│   │ Your Radio  │──── CAT ────▶│              │              │  WebSDR   │  │
+│   │ Icom/Kenwd/ │              │   HamMixer   │◀── HTTP ────│  Sites    │  │
+│   │ Elecraft/..│──── Audio ──▶│              │              │  (World)  │  │
 │   └─────────────┘              └──────┬───────┘              └───────────┘  │
 │                                       │                                     │
 │                                       ▼                                     │
@@ -45,11 +47,12 @@ Whether you're chasing DX, monitoring propagation, or comparing reception betwee
 - **Soft-clipping limiter** to prevent audio distortion
 - **WAV recording** of mixed output with automatic file naming
 
-### CI-V Integration (Icom Radios)
+### Multi-Brand Radio Integration
+- **Automatic protocol detection** - Click Connect and HamMixer identifies your radio
 - **Automatic frequency sync** - WebSDR follows your VFO in real-time
 - **Mode synchronization** - USB, LSB, CW, AM, FM modes automatically matched
 - **Dual S-Meter display** - Compare signal strength between local and remote
-- **Tested with IC-7300** - Compatible with other Icom CI-V radios
+- **Supported protocols**: Icom CI-V (binary) and Kenwood/Elecraft CAT (ASCII)
 
 ### WebSDR Control
 - **Multiple WebSDR sites** - Switch between receivers worldwide
@@ -62,6 +65,28 @@ Whether you're chasing DX, monitoring propagation, or comparing reception betwee
 - **Auto-sync button** - Automatically align audio streams (2-second capture)
 - **Manual delay control** - 0-700ms adjustable delay
 - **Compensates for internet latency** between local and remote audio
+
+---
+
+## Supported Radios
+
+HamMixer supports radios from multiple manufacturers with **automatic protocol detection**. Simply connect your radio and click Connect - the software will identify the correct protocol automatically.
+
+| Brand | Protocol | Supported Models |
+|-------|----------|------------------|
+| **Icom** | CI-V (Binary) | IC-7300, IC-7600, IC-7610, IC-7700, IC-7800, IC-7851, IC-9700, IC-705, and other CI-V compatible models |
+| **Kenwood** | CAT (ASCII) | TS-480, TS-590, TS-590S, TS-590SG, TS-890S, TS-990S, TS-2000, and other CAT-compatible models |
+| **Elecraft** | CAT (ASCII) | K2, K3, K3S, K4, KX2, KX3 |
+| **Yaesu** | CAT (ASCII) | FT-991, FT-991A, FT-710, FTDX10, FTDX101D, FTDX101MP (newer models with Kenwood-like CAT) |
+
+### Protocol Detection Order
+When you click Connect, HamMixer tries:
+1. **Icom CI-V** at 57600 baud, then 115200 baud
+2. **Kenwood/Elecraft/Yaesu CAT** at 38400, 9600, then 4800 baud
+
+Detection takes 1-2 seconds. A successful connection shows the frequency display updating in real-time.
+
+> **Note:** Older Yaesu radios using the legacy 5-byte CAT protocol (FT-450, FT-817, FT-857, FT-897, etc.) are not currently supported.
 
 ---
 
@@ -102,7 +127,7 @@ Whether you're chasing DX, monitoring propagation, or comparing reception betwee
 ```
 
 ### Top Row Sections (Left to Right)
-- **CI-V Connection (30%)**: COM port selection and Connect/Disconnect button
+- **Radio Connection (30%)**: COM port selection and Connect/Disconnect button (auto-detects protocol)
 - **WebSDR (20%)**: Site selector dropdown
 - **Radio Info (25%)**: Current frequency and mode display
 - **Tools (25%)**: BOTH/RADIO/WEBSDR toggle and REC button with indicator
@@ -138,8 +163,8 @@ Whether you're chasing DX, monitoring propagation, or comparing reception betwee
 │  ┌─────────┼──────────────────┼───────────────────────────────────────────┐  │
 │  │         │    HARDWARE ABSTRACTION LAYER                                │  │
 │  │  ┌──────┴───────┐  ┌───────┴──────┐  ┌──────────────┐                  │  │
-│  │  │ WasapiDevice │  │ CIVController│  │WebSdrManager │                  │  │
-│  │  │ (Audio I/O)  │  │ (Serial/USB) │  │ (HTTP/JS)    │                  │  │
+│  │  │ WasapiDevice │  │RadioControler│  │WebSdrManager │                  │  │
+│  │  │ (Audio I/O)  │  │ (CAT/CI-V)   │  │ (HTTP/JS)    │                  │  │
 │  │  └──────────────┘  └──────────────┘  └──────────────┘                  │  │
 │  └────────────────────────────────────────────────────────────────────────┘  │
 │                                                                              │
@@ -206,8 +231,8 @@ Whether you're chasing DX, monitoring propagation, or comparing reception betwee
 ## Requirements
 
 ### Hardware
-- **Icom transceiver** with CI-V interface (IC-7300 recommended)
-- **USB Audio Interface** or radio's built-in USB audio (IC-7300 has this)
+- **Amateur radio transceiver** with CAT control (see [Supported Radios](#supported-radios))
+- **USB Audio Interface** or radio's built-in USB audio
 - **Windows PC** with decent CPU for browser rendering
 
 ### Software
@@ -254,17 +279,19 @@ build.bat
 ## Quick Start Guide
 
 ### 1. Connect Your Radio
-- Connect IC-7300 via USB (provides both CI-V and Audio)
-- Or connect CI-V interface + separate audio cables
+- Connect your radio via USB (provides both CAT control and audio)
+- Supported: Icom, Kenwood, Elecraft, and newer Yaesu radios
+- See [Supported Radios](#supported-radios) for full compatibility list
 
 ### 2. Configure Audio Devices
 - **Radio Input**: Select your radio's USB audio device
 - **WebSDR Input**: Select VB-Cable or system audio capture
 - **Output**: Select your speakers/headphones
 
-### 3. Connect CI-V
+### 3. Connect to Radio
 - Select the COM port for your radio
-- Click **Connect** - frequency display should show your VFO
+- Click **Connect** - HamMixer auto-detects your radio's protocol
+- Frequency display should show your VFO within 1-2 seconds
 - WebSDR page will load automatically in the embedded browser
 
 ### 4. Select WebSDR Site
@@ -313,9 +340,16 @@ You can add custom WebSDR sites through **File > Manage WebSDR...** menu.
 - Verify correct input device selected in HamMixer
 
 ### WebSDR not following frequency
-- Ensure CI-V is connected (green indicator)
+- Ensure radio is connected (green indicator)
 - Check that WebSDR site supports the current band
 - Some WebSDRs have limited band coverage
+
+### Radio not detected
+- Ensure radio is powered on and connected via USB
+- Check that correct COM port is selected
+- Verify radio's CAT/CI-V settings match expected baud rates
+- Icom: 57600 or 115200 baud recommended
+- Kenwood/Elecraft/Yaesu: 38400, 9600, or 4800 baud
 
 ### Audio out of sync
 - Click **Auto-Sync** button during voice transmission
@@ -358,7 +392,9 @@ This project is provided as-is for the amateur radio community. See [LICENSE](LI
 ## Acknowledgments
 
 - **PA3FWM** - Creator of WebSDR
-- **Icom** - For the excellent CI-V protocol documentation
+- **Icom** - For the CI-V protocol documentation
+- **Kenwood** - For the CAT protocol documentation
+- **Elecraft** - For K-series programmer's reference
 - **Qt Project** - For the powerful cross-platform framework
 - **Amateur Radio Community** - For inspiration and testing
 

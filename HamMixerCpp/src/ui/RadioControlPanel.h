@@ -15,7 +15,7 @@
 #include <QGroupBox>
 #include <QTimer>
 
-#include "serial/CIVController.h"
+#include "serial/RadioController.h"
 #include "websdr/WebSdrSite.h"
 #include "websdr/WebSdrController.h"
 
@@ -52,7 +52,7 @@ public:
     void setSelectedSite(const QString& siteId);
 
     // Status updates
-    void setSerialConnectionState(CIVController::ConnectionState state);
+    void setSerialConnectionState(RadioController::ConnectionState state);
     void setWebSdrState(WebSdrController::State state);
 
     // Frequency display

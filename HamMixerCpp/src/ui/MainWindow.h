@@ -18,7 +18,7 @@
 #include "ui/Crossfader.h"
 #include "ui/SMeter.h"
 #include "ui/RadioControlPanel.h"
-#include "serial/CIVController.h"
+#include "serial/RadioController.h"
 #include "websdr/WebSdrManager.h"
 
 /**
@@ -48,7 +48,7 @@ private slots:
     // CI-V serial connection slots
     void onSerialConnectClicked();
     void onSerialDisconnectClicked();
-    void onCIVConnectionStateChanged(CIVController::ConnectionState state);
+    void onRadioConnectionStateChanged(RadioController::ConnectionState state);
     void onCIVFrequencyChanged(uint64_t frequencyHz);
     void onCIVModeChanged(uint8_t mode, const QString& modeName);
     void onCIVSMeterChanged(int value);
@@ -75,8 +75,8 @@ private:
     MasterStrip* m_masterStrip;
     Crossfader* m_crossfader;
 
-    // CI-V Controller
-    CIVController* m_civController;
+    // Radio Controller (Icom CI-V or Kenwood/Elecraft CAT)
+    RadioController* m_radioController;
 
     // WebSDR Manager (manages multiple WebSDR sites)
     WebSdrManager* m_webSdrManager;

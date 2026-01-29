@@ -85,15 +85,19 @@ set(CONFIG_HEADERS
     src/config/Settings.h
 )
 
-# Serial/CI-V library sources
+# Serial/Radio control library sources
 set(SERIAL_SOURCES
     src/serial/CIVProtocol.cpp
     src/serial/CIVController.cpp
+    src/serial/RadioController.cpp
+    src/serial/KenwoodController.cpp
 )
 
 set(SERIAL_HEADERS
     src/serial/CIVProtocol.h
     src/serial/CIVController.h
+    src/serial/RadioController.h
+    src/serial/KenwoodController.h
 )
 
 # WebSDR control sources

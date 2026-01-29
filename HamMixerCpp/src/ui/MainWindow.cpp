@@ -33,8 +33,8 @@ MainWindow::MainWindow(QWidget* parent)
         QMessageBox::critical(this, "Error", "Failed to initialize audio system");
     }
 
-    // Initialize CI-V controller
-    m_civController = new CIVController(this);
+    // Radio controller initialized on connect (auto-detects protocol)
+    m_radioController = nullptr;
 
     setupWindow();
     setupUI();
@@ -60,9 +60,9 @@ MainWindow::~MainWindow()
     m_meterTimer->stop();
     m_syncTimer->stop();
 
-    // Disconnect CI-V if connected
-    if (m_civController->isConnected()) {
-        m_civController->disconnect();
+    // Disconnect radio if connected
+    if (m_radioController && m_radioController->isConnected()) {
+        m_radioController->disconnect();
     }
 
     // Unload WebSDR site
@@ -313,22 +313,12 @@ void MainWindow::connectSignals()
         QMessageBox::warning(this, "Audio Error", error);
     });
 
-    // ========== CI-V Controller signals ==========
+    // ========== Radio Control Panel signals ==========
     connect(m_radioControlPanel, &RadioControlPanel::serialConnectClicked,
             this, &MainWindow::onSerialConnectClicked);
     connect(m_radioControlPanel, &RadioControlPanel::serialDisconnectClicked,
             this, &MainWindow::onSerialDisconnectClicked);
-
-    connect(m_civController, &CIVController::connectionStateChanged,
-            this, &MainWindow::onCIVConnectionStateChanged);
-    connect(m_civController, &CIVController::frequencyChanged,
-            this, &MainWindow::onCIVFrequencyChanged);
-    connect(m_civController, &CIVController::modeChanged,
-            this, &MainWindow::onCIVModeChanged);
-    connect(m_civController, &CIVController::smeterChanged,
-            this, &MainWindow::onCIVSMeterChanged);
-    connect(m_civController, &CIVController::errorOccurred,
-            this, &MainWindow::onCIVError);
+    // Note: Radio controller signals are connected after auto-detection in onSerialConnectClicked()
 
     // ========== WebSDR Manager signals ==========
     connect(m_radioControlPanel, &RadioControlPanel::webSdrSiteChanged,
@@ -763,151 +753,128 @@ void MainWindow::onSerialConnectClicked()
         return;
     }
 
-    // Step 2: Connect CI-V serial port with error handling
-    qDebug() << "MainWindow: Connecting to" << port << "- trying 57600 baud first...";
-    bool connected = m_civController->connect(port, 57600);
-    if (!connected) {
-        qDebug() << "MainWindow: 57600 failed, trying 115200 baud...";
-        connected = m_civController->connect(port, 115200);
+    // Clean up existing controller if any
+    if (m_radioController) {
+        m_radioController->disconnect();
+        delete m_radioController;
+        m_radioController = nullptr;
     }
 
-    if (!connected) {
-        // Get specific error from controller
-        QString lastError = m_civController->lastError();
-        QString errorMsg;
+    // Update UI state to show "Connecting..." while we detect
+    m_radioControlPanel->setSerialConnectionState(RadioController::Connecting);
 
-        if (lastError.contains("not found", Qt::CaseInsensitive) ||
-            lastError.contains("DeviceNotFound", Qt::CaseInsensitive)) {
-            errorMsg = QString("COM port %1 not found.\n\n"
-                "Please check that the port exists and the radio is connected.").arg(port);
-        } else if (lastError.contains("Permission", Qt::CaseInsensitive) ||
-                   lastError.contains("busy", Qt::CaseInsensitive) ||
-                   lastError.contains("access", Qt::CaseInsensitive)) {
-            errorMsg = QString("COM port %1 is busy or access denied.\n\n"
-                "Another application may be using this port.").arg(port);
-        } else if (lastError.contains("Open", Qt::CaseInsensitive)) {
-            errorMsg = QString("Failed to open COM port %1.\n\n"
-                "Please check the port settings and try again.").arg(port);
-        } else {
-            errorMsg = QString("Could not connect to %1.\n\n"
-                "Tried baud rates 57600 and 115200.\n"
-                "Error: %2").arg(port, lastError);
-        }
+    qDebug() << "MainWindow: Auto-detecting radio on port" << port;
 
-        QMessageBox::critical(this, "Connection Failed", errorMsg);
+    // Step 2: Auto-detect radio protocol (tries Icom CI-V, then Kenwood CAT)
+    m_radioController = RadioController::detectAndConnect(port, this);
+
+    if (!m_radioController) {
+        // No radio detected
+        QMessageBox::critical(this, "No Radio Detected",
+            "No compatible radio detected on this port.\n\n"
+            "Supported radios:\n"
+            "• Icom (IC-7300, IC-7600, IC-7610, etc.)\n"
+            "• Kenwood (TS-590, TS-890, TS-990, etc.)\n"
+            "• Elecraft (K3, K4, KX2, KX3, etc.)\n"
+            "• Yaesu (FT-991, FTDX101, FT-710, etc.)\n\n"
+            "Please check:\n"
+            "• Radio is powered on\n"
+            "• USB cable is connected\n"
+            "• Correct COM port selected");
+
+        m_radioControlPanel->setSerialConnectionState(RadioController::Disconnected);
         return;
     }
 
-    qDebug() << "MainWindow: Successfully connected to" << port;
+    // Log detected protocol
+    QString protoName = (m_radioController->protocol() == RadioController::IcomCIV)
+        ? "Icom CI-V" : "Kenwood/Elecraft CAT";
+    qDebug() << "MainWindow: Detected" << protoName << "protocol";
+    qDebug() << "MainWindow: Frequency:" << m_radioController->currentFrequency() << "Hz";
+
     m_civConnected = true;
 
-    // Update UI state to show "Connecting..." while we wait
-    m_radioControlPanel->setSerialConnectionState(CIVController::Connecting);
+    // Connect radio controller signals
+    connect(m_radioController, &RadioController::connectionStateChanged,
+            this, &MainWindow::onRadioConnectionStateChanged);
+    connect(m_radioController, &RadioController::frequencyChanged,
+            this, &MainWindow::onCIVFrequencyChanged);
+    connect(m_radioController, &RadioController::modeChanged,
+            this, &MainWindow::onCIVModeChanged);
+    connect(m_radioController, &RadioController::smeterChanged,
+            this, &MainWindow::onCIVSMeterChanged);
+    connect(m_radioController, &RadioController::errorOccurred,
+            this, &MainWindow::onCIVError);
 
-    // Step 3: Poll initial frequency/mode
-    m_civController->requestFrequency();
-    m_civController->requestMode();
+    // Step 3: Load WebSDR site
+    WebSdrSite selectedSite = m_radioControlPanel->selectedSite();
+    if (selectedSite.isValid()) {
+        m_webSdrManager->loadSite(selectedSite.id);
+    } else if (!m_settings.webSdrSites().isEmpty()) {
+        // Fallback to first site in list
+        m_webSdrManager->loadSite(m_settings.webSdrSites().first().id);
+    }
 
-    // Step 4: Wait 1500ms for CI-V to respond before loading WebSDR
-    // This ensures we have frequency/mode data before WebSDR page opens
-    // The timeout is long enough for slow radios but short enough to feel responsive
-    QTimer::singleShot(1500, this, [this]() {
-        // Check if we actually received a response from the radio
-        // If frequency is still 0, no CI-V device responded
-        uint64_t freq = m_civController->currentFrequency();
-        if (freq == 0) {
-            qWarning() << "MainWindow: No CI-V response received - no radio detected";
+    // Step 4: Wait for WebSDR to start loading, then start audio engine
+    QTimer::singleShot(200, this, [this]() {
+        // Step 5: Start audio engine
+        QString radioInput = m_devicePanel->getSelectedInputId();
+        QString loopback = m_devicePanel->getSelectedLoopbackId();
+        QString output = m_devicePanel->getSelectedOutputId();
 
-            // Show error to user
-            QMessageBox::critical(this, "No Radio Response",
-                "No CI-V response received from the radio.\n\n"
-                "Please check:\n"
-                "• The radio is powered on\n"
-                "• The USB cable is connected\n"
-                "• The correct COM port is selected\n"
-                "• CI-V is enabled in radio settings");
-
-            // Disconnect and reset state
-            m_civController->disconnect();
-            m_civConnected = false;
-            m_radioControlPanel->setSerialConnectionState(CIVController::Disconnected);
-            return;
-        }
-
-        qDebug() << "MainWindow: CI-V handshake complete, frequency:" << freq << "Hz, loading WebSDR...";
-
-        // Load only the selected WebSDR site (single site for lower CPU usage)
-        WebSdrSite selectedSite = m_radioControlPanel->selectedSite();
-        if (selectedSite.isValid()) {
-            m_webSdrManager->loadSite(selectedSite.id);
-        } else if (!m_settings.webSdrSites().isEmpty()) {
-            // Fallback to first site in list
-            m_webSdrManager->loadSite(m_settings.webSdrSites().first().id);
-        }
-
-        // Step 5: Wait for WebSDR to start loading, then start audio engine
-        QTimer::singleShot(200, this, [this]() {
-            // Note: raise()/activateWindow() removed - not needed with embedded WebSDR
-
-            // Step 6: Start audio engine
-            QString radioInput = m_devicePanel->getSelectedInputId();
-            QString loopback = m_devicePanel->getSelectedLoopbackId();
-            QString output = m_devicePanel->getSelectedOutputId();
-
-            if (radioInput.isEmpty() && loopback.isEmpty()) {
-                QMessageBox::warning(this, "Warning",
-                    "No audio input devices selected. Please select at least one input device.");
-            } else if (output.isEmpty()) {
-                QMessageBox::warning(this, "Warning",
-                    "No audio output device selected. Please select an output device.");
-            } else if (m_audioManager->startStreams(radioInput, loopback, output)) {
-                // Apply mixer settings
-                MixerCore* mixer = m_audioManager->mixer();
-                if (mixer) {
-                    mixer->setDelayMs(static_cast<float>(m_delaySlider->value()));
-                    mixer->setMasterVolume(m_masterStrip->getVolume() / 100.0f);
-                    mixer->setMasterMute(m_masterStrip->isMuted());
-                    mixer->setChannel1Volume(m_radioStrip->getVolume() / 100.0f);
-                    mixer->setChannel2Volume(m_websdrStrip->getVolume() / 100.0f);
-                    mixer->setChannel1Mute(m_radioStrip->isMuted());
-                    mixer->setChannel2Mute(m_websdrStrip->isMuted());
-                }
-
-                // Apply crossfader settings with mute override
-                applyPanningWithMuteOverride();
-
-                // Apply audio source mode
-                applyAudioSourceMode(m_radioControlPanel->audioSourceMode());
-
-                // Enable recording
-                m_radioControlPanel->setRecordEnabled(true);
-
-                qDebug() << "Audio streams started";
-            } else {
-                QMessageBox::warning(this, "Audio Error",
-                    QString("Failed to start audio streams.\n\n%1")
-                        .arg(m_audioManager->lastError()));
+        if (radioInput.isEmpty() && loopback.isEmpty()) {
+            QMessageBox::warning(this, "Warning",
+                "No audio input devices selected. Please select at least one input device.");
+        } else if (output.isEmpty()) {
+            QMessageBox::warning(this, "Warning",
+                "No audio output device selected. Please select an output device.");
+        } else if (m_audioManager->startStreams(radioInput, loopback, output)) {
+            // Apply mixer settings
+            MixerCore* mixer = m_audioManager->mixer();
+            if (mixer) {
+                mixer->setDelayMs(static_cast<float>(m_delaySlider->value()));
+                mixer->setMasterVolume(m_masterStrip->getVolume() / 100.0f);
+                mixer->setMasterMute(m_masterStrip->isMuted());
+                mixer->setChannel1Volume(m_radioStrip->getVolume() / 100.0f);
+                mixer->setChannel2Volume(m_websdrStrip->getVolume() / 100.0f);
+                mixer->setChannel1Mute(m_radioStrip->isMuted());
+                mixer->setChannel2Mute(m_websdrStrip->isMuted());
             }
 
-            // Step 7: Start CI-V polling
-            m_civController->startPolling(100);
+            // Apply crossfader settings with mute override
+            applyPanningWithMuteOverride();
 
-            // Step 8: WebSDR window is shown automatically when loaded
-            // Audio and S-meter are started by WebSdrManager::onControllerPageReady()
+            // Apply audio source mode
+            applyAudioSourceMode(m_radioControlPanel->audioSourceMode());
 
-            // Update UI state to Connected
-            m_radioControlPanel->setSerialConnectionState(CIVController::Connected);
+            // Enable recording
+            m_radioControlPanel->setRecordEnabled(true);
 
-            qDebug() << "MainWindow: Connection sequence complete";
-        });
+            qDebug() << "Audio streams started";
+        } else {
+            QMessageBox::warning(this, "Audio Error",
+                QString("Failed to start audio streams.\n\n%1")
+                    .arg(m_audioManager->lastError()));
+        }
+
+        // Step 6: Start radio polling
+        m_radioController->startPolling(100);
+
+        // Step 7: WebSDR window is shown automatically when loaded
+        // Audio and S-meter are started by WebSdrManager::onControllerPageReady()
+
+        // Update UI state to Connected
+        m_radioControlPanel->setSerialConnectionState(RadioController::Connected);
+
+        qDebug() << "MainWindow: Connection sequence complete";
     });
 }
 
 void MainWindow::onSerialDisconnectClicked()
 {
-    // Step 1: Stop CI-V polling
-    if (m_civController && m_civController->isPolling()) {
-        m_civController->stopPolling();
+    // Step 1: Stop radio polling
+    if (m_radioController && m_radioController->isPolling()) {
+        m_radioController->stopPolling();
     }
 
     // Step 2: Stop audio engine
@@ -929,15 +896,17 @@ void MainWindow::onSerialDisconnectClicked()
         m_webSdrManager->unloadCurrent();
     }
 
-    // Step 5: Disconnect CI-V serial
-    if (m_civController) {
-        m_civController->disconnect();
+    // Step 5: Disconnect radio and clean up controller
+    if (m_radioController) {
+        m_radioController->disconnect();
+        delete m_radioController;
+        m_radioController = nullptr;
     }
     m_civConnected = false;
     m_civSMeterDb = -80.0f;
 
     // Step 6: Reset UI state
-    m_radioControlPanel->setSerialConnectionState(CIVController::Disconnected);
+    m_radioControlPanel->setSerialConnectionState(RadioController::Disconnected);
     m_radioControlPanel->clearRadioInfo();
     m_radioStrip->resetMeter();
     m_websdrStrip->resetMeter();
@@ -951,19 +920,19 @@ void MainWindow::onSerialDisconnectClicked()
     qDebug() << "Disconnected and cleaned up";
 }
 
-void MainWindow::onCIVConnectionStateChanged(CIVController::ConnectionState state)
+void MainWindow::onRadioConnectionStateChanged(RadioController::ConnectionState state)
 {
     m_radioControlPanel->setSerialConnectionState(state);
 
-    if (state == CIVController::Connected) {
+    if (state == RadioController::Connected) {
         m_civConnected = true;
-        qDebug() << "CI-V: Connected to radio";
+        qDebug() << "Radio: Connected";
     } else {
         m_civConnected = false;
         m_civSMeterDb = -80.0f;
 
-        if (state == CIVController::Disconnected) {
-            qDebug() << "CI-V: Disconnected";
+        if (state == RadioController::Disconnected) {
+            qDebug() << "Radio: Disconnected";
         }
     }
 }
