@@ -84,6 +84,8 @@ void RadioControlPanel::setupUI()
         "  border: 1px solid #555555; "
         "  border-radius: 4px; "
         "  font-size: 14px; "
+        "  padding: 0px; "
+        "  text-align: center; "
         "}"
         "QPushButton:hover { background-color: #4A4A4A; }"
         "QPushButton:pressed { background-color: #2A2A2A; }"
