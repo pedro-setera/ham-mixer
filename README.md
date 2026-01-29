@@ -49,6 +49,7 @@ Whether you're chasing DX, monitoring propagation, or comparing reception betwee
 
 ### Multi-Brand Radio Integration
 - **Automatic protocol detection** - Click Connect and HamMixer identifies your radio
+- **Icom model detection** - Automatically detects and displays your Icom radio model (IC-7300, IC-705, IC-7610, etc.)
 - **Automatic frequency sync** - WebSDR follows your VFO in real-time
 - **Mode synchronization** - USB, LSB, CW, AM, FM modes automatically matched
 - **Dual S-Meter display** - Compare signal strength between local and remote
@@ -74,7 +75,7 @@ HamMixer supports radios from multiple manufacturers with **automatic protocol d
 
 | Brand | Protocol | Supported Models |
 |-------|----------|------------------|
-| **Icom** | CI-V (Binary) | IC-7300, IC-7600, IC-7610, IC-7700, IC-7800, IC-7851, IC-9700, IC-705, and other CI-V compatible models |
+| **Icom** | CI-V (Binary) | IC-705, IC-7100, IC-7300, IC-7610, IC-7851, IC-9700, and other CI-V compatible models. **Model auto-detected and displayed.** |
 | **Kenwood** | CAT (ASCII) | TS-480, TS-590, TS-590S, TS-590SG, TS-890S, TS-990S, TS-2000, and other CAT-compatible models |
 | **Elecraft** | CAT (ASCII) | K2, K3, K3S, K4, KX2, KX3 |
 | **Yaesu** | CAT (ASCII) | FT-991, FT-991A, FT-710, FTDX10, FTDX101D, FTDX101MP (newer models with Kenwood-like CAT) |
@@ -96,26 +97,21 @@ Detection takes 1-2 seconds. A successful connection shows the frequency display
 ┌────────────────────────────────────────────────────────────────────────────────┐
 │                              HamMixer CT7BAC v1.4                              │
 ├────────────────────────────────────────────────────────────────────────────────┤
-│ ┌─────────────────┐ ┌───────────┐ ┌──────────────┐ ┌────────────────────────┐  │
-│ │ CI-V Connection │ │  WebSDR   │ │  Radio Info  │ │        Tools           │  │
-│ │ [Port▼][Connect]│ │ [Site▼]   │ │ Freq | Mode  │ │ [BOTH] [REC] ●         │  │
-│ └─────────────────┘ └───────────┘ └──────────────┘ └────────────────────────┘  │
+│ ┌─────────────────┐ ┌───────────┐ ┌──────────────────────┐ ┌────────────────┐  │
+│ │ CI-V Connection │ │  WebSDR   │ │ Radio Info - IC-7300 │ │     Tools      │  │
+│ │ [Port▼][Connect]│ │ [Site▼]   │ │    Freq   |   Mode   │ │ [BOTH] [REC] ● │  │
+│ └─────────────────┘ └───────────┘ └──────────────────────┘ └────────────────┘  │
 ├────────────────────────────────────────────────────────────────────────────────┤
-│ ┌─────────────────────────────────────┐  ┌──────────────────────────────────┐  │
-│ │          Device Selection           │  │            S-Meters              │  │
-│ │  Radio Input | Loopback | Output    │  │     [Radio]      [WebSDR]        │  │
-│ └─────────────────────────────────────┘  └──────────────────────────────────┘  │
-├────────────────────────────────────────────────────────────────────────────────┤
-│ ┌───────────────────────┐  ┌────────────────────────────────────────────────┐  │
-│ │    Delay (Radio)      │  │                   Levels                       │  │
-│ │ [Auto-Sync]   300ms   │  │   Radio      WebSDR    │    Master             │  │
-│ │ ═══════════●════════  │  │   100%       100%      │     80%               │  │
-│ ├───────────────────────┤  │  ┌─┐ █      ┌─┐ █      │    ┌─┐ ██             │  │
-│ │      Crossfader       │  │  │ │ █      │ │ █      │    │ │ ██             │  │
-│ │  Radio ●───────WebSDR │  │  │ │ █      │ │ █      │    │ │ ██             │  │
-│ │                       │  │  └─┘ █      └─┘ █      │    └─┘ ██             │  │
-│ └───────────────────────┘  │  [MUTE]     [MUTE]     │    [MUTE]             │  │
-│                            └────────────────────────────────────────────────┘  │
+│ ┌───────────────────────┐ ┌─────────────┐ ┌────────────────────────────────┐   │
+│ │    Delay (Radio)      │ │  S-Meters   │ │            Levels              │   │
+│ │ [Auto-Sync]   300ms   │ │ ┌─────────┐ │ │  Radio     WebSDR  │  Master   │   │
+│ │ ═══════════●════════  │ │ │ Radio   │ │ │  100%      100%    │   80%     │   │
+│ ├───────────────────────┤ │ └─────────┘ │ │  ┌─┐ █    ┌─┐ █    │  ┌─┐ ██   │   │
+│ │      Crossfader       │ │ ┌─────────┐ │ │  │ │ █    │ │ █    │  │ │ ██   │   │
+│ │  Radio ●───────WebSDR │ │ │ WebSDR  │ │ │  │ │ █    │ │ █    │  │ │ ██   │   │
+│ │                       │ │ └─────────┘ │ │  └─┘ █    └─┘ █    │  └─┘ ██   │   │
+│ └───────────────────────┘ └─────────────┘ │  [MUTE]   [MUTE]   │  [MUTE]   │   │
+│                                           └────────────────────────────────┘   │
 ├────────────────────────────────────────────────────────────────────────────────┤
 │ ┌────────────────────────────────────────────────────────────────────────────┐ │
 │ │                           WebSDR Browser                                   │ │
@@ -129,8 +125,16 @@ Detection takes 1-2 seconds. A successful connection shows the frequency display
 ### Top Row Sections (Left to Right)
 - **Radio Connection (30%)**: COM port selection and Connect/Disconnect button (auto-detects protocol)
 - **WebSDR (20%)**: Site selector dropdown
-- **Radio Info (25%)**: Current frequency and mode display
+- **Radio Info (25%)**: Current frequency and mode display; shows detected Icom model (e.g., "Radio Info - IC-7300")
 - **Tools (25%)**: BOTH/RADIO/WEBSDR toggle and REC button with indicator
+
+### Controls Row
+- **Delay/Crossfader**: Time sync controls and audio balance
+- **S-Meters**: Stacked vertically - Radio on top, WebSDR below
+- **Levels**: Channel strips with volume sliders, LED meters, and mute buttons
+
+### Audio Device Configuration
+Audio devices are configured via **File > Audio Devices...** menu, keeping the main window clean and focused.
 
 ---
 
@@ -284,6 +288,7 @@ build.bat
 - See [Supported Radios](#supported-radios) for full compatibility list
 
 ### 2. Configure Audio Devices
+- Open **File > Audio Devices...** to configure audio routing
 - **Radio Input**: Select your radio's USB audio device
 - **WebSDR Input**: Select VB-Cable or system audio capture
 - **Output**: Select your speakers/headphones
@@ -291,6 +296,7 @@ build.bat
 ### 3. Connect to Radio
 - Select the COM port for your radio
 - Click **Connect** - HamMixer auto-detects your radio's protocol
+- For Icom radios, the model name will appear in the title (e.g., "Radio Info - IC-7300")
 - Frequency display should show your VFO within 1-2 seconds
 - WebSDR page will load automatically in the embedded browser
 

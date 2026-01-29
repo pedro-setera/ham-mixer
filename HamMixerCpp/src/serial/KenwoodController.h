@@ -42,6 +42,7 @@ public:
     uint8_t currentMode() const override { return m_currentMode; }
     QString currentModeName() const override { return m_currentModeName; }
     int currentSMeter() const override { return m_currentSMeter; }
+    QString radioModel() const override { return QString(); }  // Not supported for Kenwood CAT
 
 private slots:
     void onReadyRead();

@@ -223,4 +223,17 @@ uint8_t getDestAddress(const QByteArray& frame)
     return static_cast<uint8_t>(frame[2]);
 }
 
+QString addressToModelName(uint8_t civAddress)
+{
+    switch (civAddress) {
+        case ADDR_IC705:   return "IC-705";
+        case ADDR_IC7100:  return "IC-7100";
+        case ADDR_IC7300:  return "IC-7300";
+        case ADDR_IC7610:  return "IC-7610";
+        case ADDR_IC7851:  return "IC-7851";
+        case ADDR_IC9700:  return "IC-9700";
+        default:           return QString();
+    }
+}
+
 } // namespace CIVProtocol

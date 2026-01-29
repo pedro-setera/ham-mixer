@@ -59,6 +59,7 @@ public:
     virtual uint8_t currentMode() const = 0;
     virtual QString currentModeName() const = 0;
     virtual int currentSMeter() const = 0;
+    virtual QString radioModel() const = 0;
 
     // Static factory with auto-detection
     static RadioController* detectAndConnect(const QString& port, QObject* parent);
@@ -69,6 +70,7 @@ signals:
     void modeChanged(uint8_t mode, const QString& modeName);
     void smeterChanged(int value);  // 0-255 scale
     void errorOccurred(const QString& error);
+    void radioModelDetected(const QString& modelName);
 };
 
 #endif // RADIOCONTROLLER_H

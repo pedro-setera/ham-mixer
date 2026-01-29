@@ -18,6 +18,7 @@ CIVController::CIVController(QObject* parent)
     , m_currentMode(0xFF)      // Invalid mode so first read always triggers update
     , m_currentModeName("---")
     , m_currentSMeter(0)
+    , m_radioModel()
     , m_pollPhase(0)
 {
 }
@@ -350,10 +351,21 @@ void CIVController::processFrame(const QByteArray& frame)
     qDebug() << "CIVController: processFrame - src:" << QString("0x%1").arg(srcAddr, 2, 16, QChar('0'))
              << "dst:" << QString("0x%1").arg(dstAddr, 2, 16, QChar('0'));
 
-    // Process frames from the radio (0x94) - accept any destination (E0, F4, 00, etc.)
-    // The radio may be configured to send to different addresses
-    if (srcAddr != CIVProtocol::ADDR_IC7300) {
-        qDebug() << "CIVController: Ignoring frame (not from radio 0x94)";
+    // Detect radio model from source address (only once)
+    if (m_radioModel.isEmpty()) {
+        QString detectedModel = CIVProtocol::addressToModelName(srcAddr);
+        if (!detectedModel.isEmpty()) {
+            m_radioModel = detectedModel;
+            qDebug() << "CIVController: Detected radio model:" << m_radioModel;
+            emit radioModelDetected(m_radioModel);
+        }
+    }
+
+    // Process frames from known Icom radios - accept any valid CI-V source
+    // Check if source is a known Icom address
+    QString modelCheck = CIVProtocol::addressToModelName(srcAddr);
+    if (modelCheck.isEmpty()) {
+        qDebug() << "CIVController: Ignoring frame from unknown source";
         return;
     }
 

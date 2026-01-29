@@ -19,8 +19,15 @@ constexpr uint8_t PREAMBLE = 0xFE;
 constexpr uint8_t EOM = 0xFD;           // End of message
 
 // Default addresses
-constexpr uint8_t ADDR_IC7300 = 0x94;   // IC-7300 default address
 constexpr uint8_t ADDR_CONTROLLER = 0xE0; // Controller (PC) address
+
+// Known Icom radio CI-V addresses
+constexpr uint8_t ADDR_IC705 = 0xA4;
+constexpr uint8_t ADDR_IC7100 = 0x88;
+constexpr uint8_t ADDR_IC7300 = 0x94;
+constexpr uint8_t ADDR_IC7610 = 0x98;
+constexpr uint8_t ADDR_IC7851 = 0x8E;
+constexpr uint8_t ADDR_IC9700 = 0xA2;
 
 // Command codes
 constexpr uint8_t CMD_TRANSCEIVE_FREQ = 0x00;  // Transceive frequency (unsolicited)
@@ -178,6 +185,13 @@ uint8_t getSourceAddress(const QByteArray& frame);
  * @return Destination address byte
  */
 uint8_t getDestAddress(const QByteArray& frame);
+
+/**
+ * Convert CI-V address to radio model name
+ * @param civAddress CI-V address byte
+ * @return Model name (e.g., "IC-7300") or empty string if unknown
+ */
+QString addressToModelName(uint8_t civAddress);
 
 } // namespace CIVProtocol
 

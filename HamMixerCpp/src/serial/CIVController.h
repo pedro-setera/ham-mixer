@@ -51,6 +51,7 @@ public:
     uint8_t currentMode() const override { return m_currentMode; }
     QString currentModeName() const override { return m_currentModeName; }
     int currentSMeter() const override { return m_currentSMeter; }
+    QString radioModel() const override { return m_radioModel; }
 
 private slots:
     void onReadyRead();
@@ -75,6 +76,7 @@ private:
     uint8_t m_currentMode;
     QString m_currentModeName;
     int m_currentSMeter;
+    QString m_radioModel;
 
     // Polling state machine
     int m_pollPhase;  // 0=freq, 1=mode, 2=smeter

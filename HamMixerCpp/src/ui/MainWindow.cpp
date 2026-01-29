@@ -799,6 +799,8 @@ void MainWindow::onSerialConnectClicked()
             this, &MainWindow::onCIVSMeterChanged);
     connect(m_radioController, &RadioController::errorOccurred,
             this, &MainWindow::onCIVError);
+    connect(m_radioController, &RadioController::radioModelDetected,
+            m_radioControlPanel, &RadioControlPanel::setRadioModel);
 
     // Update display with initial values from detection
     // (The signals were consumed by detection lambda, so we need to manually update)
@@ -808,6 +810,9 @@ void MainWindow::onSerialConnectClicked()
     if (!m_radioController->currentModeName().isEmpty() &&
         m_radioController->currentModeName() != "---") {
         m_radioControlPanel->setModeDisplay(m_radioController->currentModeName());
+    }
+    if (!m_radioController->radioModel().isEmpty()) {
+        m_radioControlPanel->setRadioModel(m_radioController->radioModel());
     }
 
     // Step 3: Load WebSDR site

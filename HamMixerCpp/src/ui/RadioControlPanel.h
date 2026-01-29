@@ -59,6 +59,7 @@ public:
     void setFrequencyDisplay(uint64_t frequencyHz);
     void setModeDisplay(const QString& mode);
     void clearRadioInfo();
+    void setRadioModel(const QString& modelName);
 
     // Refresh available ports
     void refreshPorts();
@@ -115,6 +116,9 @@ private:
     // State
     bool m_isConnected;
     QList<WebSdrSite> m_sites;
+
+    // Radio Info group box (for title updates)
+    QGroupBox* m_radioInfoGroup;
 };
 
 #endif // RADIOCONTROLPANEL_H

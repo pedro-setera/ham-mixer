@@ -19,6 +19,7 @@ RadioControlPanel::RadioControlPanel(QWidget* parent)
     , m_audioSourceMode(Both)
     , m_recording(false)
     , m_blinkState(false)
+    , m_radioInfoGroup(nullptr)
 {
     setupUI();
     connectSignals();
@@ -80,20 +81,20 @@ void RadioControlPanel::setupUI()
     mainLayout->addWidget(webSdrGroup, 20);
 
     // ===== Radio Info Section (25%) =====
-    QGroupBox* infoGroup = new QGroupBox("Radio Info", this);
-    QHBoxLayout* infoLayout = new QHBoxLayout(infoGroup);
+    m_radioInfoGroup = new QGroupBox("Radio Info", this);
+    QHBoxLayout* infoLayout = new QHBoxLayout(m_radioInfoGroup);
     infoLayout->setContentsMargins(10, 5, 10, 5);
     infoLayout->setSpacing(15);
 
     // Frequency
-    QLabel* freqLabel = new QLabel("Freq:", infoGroup);
-    m_frequencyLabel = new QLabel("---.--- MHz", infoGroup);
+    QLabel* freqLabel = new QLabel("Freq:", m_radioInfoGroup);
+    m_frequencyLabel = new QLabel("---.--- MHz", m_radioInfoGroup);
     m_frequencyLabel->setStyleSheet(
         "QLabel { font-family: 'Consolas'; font-size: 11pt; font-weight: bold; color: #00BCD4; }");
 
     // Mode
-    QLabel* modeLabel = new QLabel("Mode:", infoGroup);
-    m_modeLabel = new QLabel("---", infoGroup);
+    QLabel* modeLabel = new QLabel("Mode:", m_radioInfoGroup);
+    m_modeLabel = new QLabel("---", m_radioInfoGroup);
     m_modeLabel->setStyleSheet(
         "QLabel { font-family: 'Consolas'; font-size: 11pt; font-weight: bold; color: #E8E8E8; }");
 
@@ -103,7 +104,7 @@ void RadioControlPanel::setupUI()
     infoLayout->addWidget(modeLabel);
     infoLayout->addWidget(m_modeLabel);
 
-    mainLayout->addWidget(infoGroup, 25);
+    mainLayout->addWidget(m_radioInfoGroup, 25);
 
     // ===== Tools Section (25%) =====
     QGroupBox* toolsGroup = new QGroupBox("Tools", this);
@@ -395,6 +396,21 @@ void RadioControlPanel::clearRadioInfo()
 {
     m_frequencyLabel->setText("--- kHz");
     m_modeLabel->setText("---");
+    // Reset title to default
+    if (m_radioInfoGroup) {
+        m_radioInfoGroup->setTitle("Radio Info");
+    }
+}
+
+void RadioControlPanel::setRadioModel(const QString& modelName)
+{
+    if (m_radioInfoGroup) {
+        if (modelName.isEmpty()) {
+            m_radioInfoGroup->setTitle("Radio Info");
+        } else {
+            m_radioInfoGroup->setTitle(QString("Radio Info - %1").arg(modelName));
+        }
+    }
 }
 
 void RadioControlPanel::refreshPorts()
