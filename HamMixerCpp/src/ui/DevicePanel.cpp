@@ -26,7 +26,7 @@ void DevicePanel::setupUI()
     inputLabel->setFixedWidth(55);
     m_inputCombo = new QComboBox(this);
     m_inputCombo->setMinimumWidth(200);
-    m_inputCombo->setToolTip("Select radio audio input (e.g., IC-7300 USB Audio CODEC)");
+    m_inputCombo->setToolTip("Select radio audio input (e.g., transceiver USB Audio CODEC)");
     inputRow->addWidget(inputLabel);
     inputRow->addWidget(m_inputCombo, 1);
     groupLayout->addLayout(inputRow);

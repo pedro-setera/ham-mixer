@@ -7,7 +7,7 @@
 #define HAMMIXER_VERSION_STRING "1.4"
 #define HAMMIXER_VERSION_DATE "28Jan2026"
 
-#define HAMMIXER_APP_NAME "HamMixer CT7BAC :: IC7300 + WebSDR Mixer"
+#define HAMMIXER_APP_NAME "HamMixer CT7BAC :: Transceiver + WebSDR Mixer"
 #define HAMMIXER_WEBSDR_NAME "HamMixer CT7BAC :: WebSDR Viewer"
 #define HAMMIXER_ORG_NAME "HamMixer"
 #define HAMMIXER_ORG_DOMAIN "hammixer.local"

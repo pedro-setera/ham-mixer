@@ -48,7 +48,7 @@ void RadioControlPanel::setupUI()
     m_portCombo = new QComboBox(serialGroup);
     m_portCombo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     m_portCombo->setStyleSheet("QComboBox { min-width: 60px; }");
-    m_portCombo->setToolTip("Select the COM port connected to the IC-7300");
+    m_portCombo->setToolTip("Select the COM port connected to the transceiver");
 
     m_connectButton = new QPushButton("Connect", serialGroup);
     m_connectButton->setFixedWidth(85);
@@ -113,7 +113,7 @@ void RadioControlPanel::setupUI()
 
     // Audio source toggle button (RADIO + WEBSDR / RADIO / WEBSDR)
     m_sourceToggleButton = new QPushButton("RADIO + WEBSDR", toolsGroup);
-    m_sourceToggleButton->setFixedWidth(140);
+    m_sourceToggleButton->setFixedWidth(150);
     m_sourceToggleButton->setToolTip("Toggle audio source: RADIO + WEBSDR -> RADIO -> WEBSDR");
     updateSourceButtonText();
 

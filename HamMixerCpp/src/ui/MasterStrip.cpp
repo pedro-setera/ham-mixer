@@ -42,13 +42,13 @@ void MasterStrip::setupUI()
     m_volumeSlider = new QSlider(Qt::Vertical, this);
     m_volumeSlider->setRange(0, 100);
     m_volumeSlider->setValue(80);
-    m_volumeSlider->setFixedHeight(155);
+    m_volumeSlider->setFixedHeight(175);  // +20px for taller Levels section
     m_volumeSlider->setToolTip("Master Volume");
     controlsLayout->addWidget(m_volumeSlider, 0, Qt::AlignCenter);
 
     // Stereo level meter
     m_levelMeter = new LevelMeter(true, this);
-    m_levelMeter->setFixedHeight(155);
+    m_levelMeter->setFixedHeight(175);  // +20px for taller Levels section
     controlsLayout->addWidget(m_levelMeter, 0, Qt::AlignCenter);
 
     mainLayout->addLayout(controlsLayout);

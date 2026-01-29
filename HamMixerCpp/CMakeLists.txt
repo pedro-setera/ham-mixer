@@ -57,6 +57,7 @@ set(UI_SOURCES
     src/ui/VBCableWizard.cpp
     src/ui/RadioControlPanel.cpp
     src/ui/WebSdrManagerDialog.cpp
+    src/ui/AudioDevicesDialog.cpp
     src/ui/MainWindow.cpp
 )
 
@@ -73,6 +74,7 @@ set(UI_HEADERS
     src/ui/VBCableWizard.h
     src/ui/RadioControlPanel.h
     src/ui/WebSdrManagerDialog.h
+    src/ui/AudioDevicesDialog.h
     src/ui/MainWindow.h
 )
 

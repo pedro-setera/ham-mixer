@@ -31,12 +31,18 @@ RadioController* RadioController::detectAndConnect(const QString& port, QObject*
             timeout.setSingleShot(true);
 
             bool gotResponse = false;
-            QObject::connect(icom, &RadioController::frequencyChanged,
+
+            // Store connection so we can disconnect it before returning
+            QMetaObject::Connection freqConn = QObject::connect(icom, &RadioController::frequencyChanged,
                 [&](uint64_t) { gotResponse = true; loop.quit(); });
             QObject::connect(&timeout, &QTimer::timeout, &loop, &QEventLoop::quit);
 
             timeout.start(800);  // 800ms timeout
             loop.exec();
+
+            // CRITICAL: Disconnect the temporary lambda before returning
+            // Otherwise it will crash when frequency changes (dangling reference)
+            QObject::disconnect(freqConn);
 
             if (gotResponse && icom->currentFrequency() > 0) {
                 qDebug() << "RadioController: Detected Icom CI-V radio at" << baud << "baud";
@@ -65,12 +71,18 @@ RadioController* RadioController::detectAndConnect(const QString& port, QObject*
             timeout.setSingleShot(true);
 
             bool gotResponse = false;
-            QObject::connect(kenwood, &RadioController::frequencyChanged,
+
+            // Store connection so we can disconnect it before returning
+            QMetaObject::Connection freqConn = QObject::connect(kenwood, &RadioController::frequencyChanged,
                 [&](uint64_t) { gotResponse = true; loop.quit(); });
             QObject::connect(&timeout, &QTimer::timeout, &loop, &QEventLoop::quit);
 
             timeout.start(800);  // 800ms timeout
             loop.exec();
+
+            // CRITICAL: Disconnect the temporary lambda before returning
+            // Otherwise it will crash when frequency changes (dangling reference)
+            QObject::disconnect(freqConn);
 
             if (gotResponse && kenwood->currentFrequency() > 0) {
                 qDebug() << "RadioController: Detected Kenwood/Elecraft/Yaesu CAT radio at" << baud << "baud";

@@ -42,7 +42,7 @@ void ChannelStrip::setupUI()
     m_volumeSlider = new QSlider(Qt::Vertical, this);
     m_volumeSlider->setRange(0, 100);
     m_volumeSlider->setValue(100);
-    m_volumeSlider->setFixedHeight(155);
+    m_volumeSlider->setFixedHeight(175);  // +20px for taller Levels section
     m_volumeSlider->setToolTip("Channel Volume");
     connect(m_volumeSlider, &QSlider::valueChanged, this, [this](int value) {
         updateVolumeLabel(value);
@@ -53,7 +53,7 @@ void ChannelStrip::setupUI()
     // Level meter (mono)
     m_levelMeter = new LevelMeter(false, this);
     m_levelMeter->setFixedWidth(36);
-    m_levelMeter->setFixedHeight(155);
+    m_levelMeter->setFixedHeight(175);  // +20px for taller Levels section
     controlsRow->addWidget(m_levelMeter);
 
     mainLayout->addLayout(controlsRow);

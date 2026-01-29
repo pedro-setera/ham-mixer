@@ -1,6 +1,7 @@
 #include "ui/MainWindow.h"
 #include "ui/Styles.h"
 #include "ui/WebSdrManagerDialog.h"
+#include "ui/AudioDevicesDialog.h"
 #include "audio/MixerCore.h"
 #include "serial/CIVProtocol.h"
 #include "HamMixer/Version.h"
@@ -83,7 +84,7 @@ void MainWindow::setupWindow()
 {
     setWindowTitle(QString("%1 v%2 (%3)").arg(HAMMIXER_APP_NAME).arg(HAMMIXER_VERSION_STRING).arg(HAMMIXER_VERSION_DATE));
     setWindowIcon(QIcon(":/icons/icons/antenna.png"));
-    setMinimumSize(1200, 876);  // Wider window (+200px) with embedded browser
+    setMinimumSize(1200, 776);  // Reduced height after moving Audio Devices to dialog
     resize(m_settings.window().size.width(), m_settings.window().size.height());
     move(m_settings.window().position);
 
@@ -105,39 +106,16 @@ void MainWindow::setupUI()
     m_radioControlPanel = new RadioControlPanel(this);
     mainLayout->addWidget(m_radioControlPanel);
 
-    // ========== Device Panel and S-Meters section ==========
-    QHBoxLayout* topLayout = new QHBoxLayout();
-    topLayout->setSpacing(10);
-
-    // Device Panel (45% of top section)
+    // ========== Device Panel (not in layout - shown via dialog) ==========
     m_devicePanel = new DevicePanel(this);
-    topLayout->addWidget(m_devicePanel, 45);
+    m_devicePanel->hide();  // Hidden - accessed via File > Audio Devices dialog
 
-    // S-Meters container (55% of top section)
-    QGroupBox* smeterGroup = new QGroupBox("S-Meters", this);
-    QHBoxLayout* smeterLayout = new QHBoxLayout(smeterGroup);
-    smeterLayout->setContentsMargins(10, 5, 10, 5);
-    smeterLayout->setSpacing(15);
-    smeterLayout->setAlignment(Qt::AlignCenter);
-
-    // Radio S-Meter
-    m_radioSMeter = new SMeter("Radio", this);
-    smeterLayout->addWidget(m_radioSMeter);
-
-    // WebSDR S-Meter
-    m_websdrSMeter = new SMeter("WebSDR", this);
-    smeterLayout->addWidget(m_websdrSMeter);
-
-    topLayout->addWidget(smeterGroup, 55);
-
-    mainLayout->addLayout(topLayout);
-
-    // Main content area (controls + levels)
+    // ========== Main content area (controls + S-Meters + levels) ==========
     QHBoxLayout* contentLayout = new QHBoxLayout();
-    contentLayout->setSpacing(15);
+    contentLayout->setSpacing(10);
     contentLayout->setAlignment(Qt::AlignTop);
 
-    // Left side: Controls in a widget container (no Tools section - moved to top row)
+    // Left side: Controls in a widget container (Delay + Crossfader stack)
     QWidget* controlsWidget = new QWidget(this);
     controlsWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     QVBoxLayout* controlsLayout = new QVBoxLayout(controlsWidget);
@@ -146,7 +124,7 @@ void MainWindow::setupUI()
 
     // Delay controls - two rows: top row has button and label, bottom row has slider
     QGroupBox* delayGroup = new QGroupBox("Delay (Radio)", this);
-    delayGroup->setFixedHeight(135);
+    delayGroup->setFixedHeight(145);  // +10px for taller row
     QVBoxLayout* delayMainLayout = new QVBoxLayout(delayGroup);
     delayMainLayout->setSpacing(10);
 
@@ -178,19 +156,34 @@ void MainWindow::setupUI()
 
     // Crossfader
     QGroupBox* crossfaderGroup = new QGroupBox("Crossfader", this);
-    crossfaderGroup->setFixedHeight(115);
+    crossfaderGroup->setFixedHeight(125);  // +10px for taller row
     QVBoxLayout* crossfaderLayout = new QVBoxLayout(crossfaderGroup);
     m_crossfader = new Crossfader(this);
     crossfaderLayout->addWidget(m_crossfader);
     controlsLayout->addWidget(crossfaderGroup);
 
-    // No more Tools group here - moved to RadioControlPanel top row
+    contentLayout->addWidget(controlsWidget, 1);  // stretch factor 1 = flexible width
 
-    contentLayout->addWidget(controlsWidget, 1);
+    // Middle: S-Meters stack (Radio on top, WebSDR on bottom)
+    QGroupBox* smeterGroup = new QGroupBox("S-Meters", this);
+    smeterGroup->setFixedWidth(292);  // 250px meter + padding + group box margins
+    QVBoxLayout* smeterLayout = new QVBoxLayout(smeterGroup);
+    smeterLayout->setContentsMargins(10, 5, 10, 5);
+    smeterLayout->setSpacing(5);
 
-    // Right side: Levels (in a group box) - aligned with Delay+Crossfader stack
+    // Radio S-Meter (top)
+    m_radioSMeter = new SMeter("Radio", this);
+    smeterLayout->addWidget(m_radioSMeter);
+
+    // WebSDR S-Meter (bottom)
+    m_websdrSMeter = new SMeter("WebSDR", this);
+    smeterLayout->addWidget(m_websdrSMeter);
+
+    contentLayout->addWidget(smeterGroup, 0);  // stretch factor 0 = fixed width
+
+    // Right side: Levels (in a group box)
     QGroupBox* levelsGroup = new QGroupBox("Levels", this);
-    levelsGroup->setFixedHeight(260);  // Height to align with Delay+Crossfader sections
+    levelsGroup->setFixedHeight(280);  // +20px for taller row
     QHBoxLayout* metersLayout = new QHBoxLayout(levelsGroup);
     metersLayout->setContentsMargins(15, 0, 15, 0);
     metersLayout->setSpacing(20);
@@ -214,13 +207,13 @@ void MainWindow::setupUI()
     m_masterStrip = new MasterStrip(this);
     metersLayout->addWidget(m_masterStrip, 0, Qt::AlignTop);
 
-    contentLayout->addWidget(levelsGroup);
+    contentLayout->addWidget(levelsGroup, 0);  // stretch factor 0 = fixed width
 
     mainLayout->addLayout(contentLayout);
 
     // ========== Embedded WebSDR Browser (bottom section) ==========
     QGroupBox* browserGroup = new QGroupBox("WebSDR Browser", this);
-    browserGroup->setFixedHeight(300);
+    browserGroup->setFixedHeight(350);  // +50px for more webpage room
     browserGroup->setContentsMargins(0, 0, 0, 0);  // Remove group box margins
     QVBoxLayout* browserLayout = new QVBoxLayout(browserGroup);
     browserLayout->setContentsMargins(5, 0, 5, 5);  // Reduced top margin to avoid double spacing
@@ -249,6 +242,7 @@ void MainWindow::setupUI()
 void MainWindow::setupMenuBar()
 {
     QMenu* fileMenu = menuBar()->addMenu("&File");
+    fileMenu->addAction("Audio &Devices...", this, &MainWindow::onAudioDevicesClicked);
     fileMenu->addAction("Manage &WebSDR...", this, &MainWindow::onManageWebSdr);
     fileMenu->addSeparator();
     fileMenu->addAction("E&xit", this, &QMainWindow::close, QKeySequence::Quit);
@@ -256,8 +250,8 @@ void MainWindow::setupMenuBar()
     QMenu* helpMenu = menuBar()->addMenu("&Help");
     helpMenu->addAction("&About", this, [this]() {
         QMessageBox::about(this, "About HamMixer",
-            QString("<h3>HamMixer :: IC7300 + WebSDR Mixer v%1</h3>"
-                    "<p>Mixes IC-7300 radio audio with multiple WebSDR audio.</p>"
+            QString("<h3>HamMixer :: Transceiver + WebSDR Mixer v%1</h3>"
+                    "<p>Mixes transceiver audio with multiple WebSDR audio.</p>"
                     "<p>Architecture and management by Pedro Silva CT7BAC, Portugal.</p>"
                     "<p>Coding 100% by Claude Code AI.</p>"
                     "<p>Built with C++ and Qt %2.</p>"
@@ -806,6 +800,16 @@ void MainWindow::onSerialConnectClicked()
     connect(m_radioController, &RadioController::errorOccurred,
             this, &MainWindow::onCIVError);
 
+    // Update display with initial values from detection
+    // (The signals were consumed by detection lambda, so we need to manually update)
+    if (m_radioController->currentFrequency() > 0) {
+        m_radioControlPanel->setFrequencyDisplay(m_radioController->currentFrequency());
+    }
+    if (!m_radioController->currentModeName().isEmpty() &&
+        m_radioController->currentModeName() != "---") {
+        m_radioControlPanel->setModeDisplay(m_radioController->currentModeName());
+    }
+
     // Step 3: Load WebSDR site
     WebSdrSite selectedSite = m_radioControlPanel->selectedSite();
     if (selectedSite.isValid()) {
@@ -1069,6 +1073,41 @@ void MainWindow::onManageWebSdr()
         }
 
         qDebug() << "WebSDR sites updated:" << newSites.size() << "sites";
+    }
+}
+
+void MainWindow::onAudioDevicesClicked()
+{
+    AudioDevicesDialog dialog(this);
+
+    // Populate the dialog's device panel with available devices
+    dialog.devicePanel()->populateInputDevices(m_audioManager->getInputDevices());
+    dialog.devicePanel()->populateLoopbackDevices(m_audioManager->getLoopbackDevices());
+    dialog.devicePanel()->populateOutputDevices(m_audioManager->getOutputDevices());
+
+    // Set current selections
+    dialog.devicePanel()->setSelectedInputByName(m_devicePanel->getSelectedInputName());
+    dialog.devicePanel()->setSelectedLoopbackByName(m_devicePanel->getSelectedLoopbackName());
+    dialog.devicePanel()->setSelectedOutputByName(m_devicePanel->getSelectedOutputName());
+
+    if (dialog.exec() == QDialog::Accepted) {
+        // Copy selections from dialog to main device panel
+        QString inputName = dialog.devicePanel()->getSelectedInputName();
+        QString loopbackName = dialog.devicePanel()->getSelectedLoopbackName();
+        QString outputName = dialog.devicePanel()->getSelectedOutputName();
+
+        m_devicePanel->setSelectedInputByName(inputName);
+        m_devicePanel->setSelectedLoopbackByName(loopbackName);
+        m_devicePanel->setSelectedOutputByName(outputName);
+
+        // Save settings
+        m_settings.devices().radioInput = inputName;
+        m_settings.devices().systemLoopback = loopbackName;
+        m_settings.devices().output = outputName;
+        m_settings.save();
+
+        qDebug() << "Audio devices updated - Input:" << inputName
+                 << "Loopback:" << loopbackName << "Output:" << outputName;
     }
 }
 

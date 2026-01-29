@@ -18,7 +18,7 @@
  * @brief Audio stream manager for HamMixer
  *
  * Manages three WASAPI audio streams:
- * - Radio input (IC-7300 or other audio device)
+ * - Radio input (transceiver USB audio or other audio device)
  * - Loopback capture (WebSDR system audio)
  * - Output (mixed audio to speakers/headphones)
  */

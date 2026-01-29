@@ -60,6 +60,9 @@ private slots:
     void onWebSdrSmeterChanged(int value);
     void onManageWebSdr();
 
+    // Settings dialogs
+    void onAudioDevicesClicked();
+
 private:
     // Audio components
     std::unique_ptr<AudioManager> m_audioManager;

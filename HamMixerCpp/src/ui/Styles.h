@@ -255,6 +255,44 @@ inline QString getStylesheet()
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
             height: 0;
         }
+
+        /* Menu Bar */
+        QMenuBar {
+            background-color: #1A1A1A;
+            color: #E8E8E8;
+            border-bottom: 1px solid #3A3A3A;
+        }
+        QMenuBar::item {
+            background-color: transparent;
+            padding: 4px 10px;
+        }
+        QMenuBar::item:selected {
+            background-color: #3A3A3A;
+            color: #E8E8E8;
+        }
+        QMenuBar::item:pressed {
+            background-color: #4A4A4A;
+            color: #E8E8E8;
+        }
+
+        /* Menu */
+        QMenu {
+            background-color: #2A2A2A;
+            border: 1px solid #3A3A3A;
+            color: #E8E8E8;
+        }
+        QMenu::item {
+            padding: 6px 30px 6px 20px;
+        }
+        QMenu::item:selected {
+            background-color: #3A3A3A;
+            color: #E8E8E8;
+        }
+        QMenu::separator {
+            height: 1px;
+            background-color: #3A3A3A;
+            margin: 4px 10px;
+        }
     )";
 }
 
