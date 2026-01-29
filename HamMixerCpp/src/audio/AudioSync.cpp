@@ -95,7 +95,7 @@ void AudioSync::addSamples(const float* radioSamples, const float* websdrSamples
         if (m_analysisThread && m_analysisThread->joinable()) {
             m_analysisThread->join();
         }
-        m_analysisThread = std::make_unique<std::thread>(&AudioSync::analyzeWithGccPhat, this);
+        m_analysisThread = std::make_unique<std::thread>(&AudioSync::analyzeWithRobustGccPhat, this);
     }
 }
 
@@ -170,20 +170,134 @@ void AudioSync::fft(std::vector<std::complex<float>>& data, bool inverse)
     }
 }
 
-// Apply bandpass filter in frequency domain (300Hz - 3000Hz)
-void AudioSync::applyBandpassFilter(std::vector<float>& signal)
+// Normalize signal to unit variance (addresses volume differences)
+void AudioSync::normalizeSignal(std::vector<float>& signal)
 {
-    // This is now a placeholder - we'll do frequency domain filtering in analyzeWithGccPhat
-    // Just remove DC offset here
+    if (signal.empty()) return;
+
+    // Remove DC offset
     float mean = std::accumulate(signal.begin(), signal.end(), 0.0f) / signal.size();
     for (auto& s : signal) {
         s -= mean;
     }
+
+    // Normalize to unit variance
+    float rms = computeRMS(signal);
+    if (rms > 1e-10f) {
+        for (auto& s : signal) {
+            s /= rms;
+        }
+    }
 }
 
-void AudioSync::analyzeWithGccPhat()
+// Voice Activity Detection - returns mask of active frames
+std::vector<bool> AudioSync::detectVoiceActivity(const std::vector<float>& signal)
 {
-    qDebug() << "Starting GCC-PHAT analysis...";
+    int numFrames = static_cast<int>(signal.size()) / VAD_FRAME_SIZE;
+    std::vector<bool> mask(numFrames, false);
+
+    for (int frame = 0; frame < numFrames; frame++) {
+        int start = frame * VAD_FRAME_SIZE;
+        int end = std::min(start + VAD_FRAME_SIZE, static_cast<int>(signal.size()));
+
+        // Compute frame energy (RMS)
+        float sumSq = 0.0f;
+        for (int i = start; i < end; i++) {
+            sumSq += signal[i] * signal[i];
+        }
+        float frameRms = std::sqrt(sumSq / (end - start));
+
+        // Frame is "active" if energy exceeds threshold
+        mask[frame] = (frameRms > VAD_THRESHOLD);
+    }
+
+    return mask;
+}
+
+// Apply VAD mask - zero out inactive frames
+void AudioSync::applyVadMask(std::vector<float>& signal, const std::vector<bool>& mask)
+{
+    int numFrames = static_cast<int>(mask.size());
+
+    for (int frame = 0; frame < numFrames; frame++) {
+        if (!mask[frame]) {
+            int start = frame * VAD_FRAME_SIZE;
+            int end = std::min(start + VAD_FRAME_SIZE, static_cast<int>(signal.size()));
+            for (int i = start; i < end; i++) {
+                signal[i] = 0.0f;
+            }
+        }
+    }
+}
+
+// Compute GCC-PHAT-beta for a frequency band, returns band SNR estimate
+float AudioSync::computeBandGccPhat(
+    const std::vector<std::complex<float>>& radioFFT,
+    const std::vector<std::complex<float>>& websdrFFT,
+    int lowBin, int highBin, float beta,
+    std::vector<std::complex<float>>& bandGcc)
+{
+    float totalMagnitude = 0.0f;
+    int binCount = 0;
+
+    for (int i = lowBin; i <= highBin && i < static_cast<int>(radioFFT.size()); i++) {
+        // Cross-spectrum: WebSDR * conj(Radio)
+        std::complex<float> crossSpectrum = websdrFFT[i] * std::conj(radioFFT[i]);
+        float magnitude = std::abs(crossSpectrum);
+
+        totalMagnitude += magnitude;
+        binCount++;
+
+        if (magnitude > 1e-10f) {
+            // GCC-PHAT-beta weighting: divide by magnitude^beta
+            // beta=1.0: full PHAT (standard)
+            // beta<1.0: reduced whitening, more robust to noise
+            float weight = std::pow(magnitude, beta);
+            bandGcc[i] = crossSpectrum / weight;
+        } else {
+            bandGcc[i] = {0.0f, 0.0f};
+        }
+
+        // Also handle negative frequencies (mirror in FFT)
+        int mirrorIdx = static_cast<int>(radioFFT.size()) - i;
+        if (mirrorIdx > 0 && mirrorIdx < static_cast<int>(radioFFT.size()) && mirrorIdx != i) {
+            std::complex<float> crossSpectrumMirror = websdrFFT[mirrorIdx] * std::conj(radioFFT[mirrorIdx]);
+            float magnitudeMirror = std::abs(crossSpectrumMirror);
+            if (magnitudeMirror > 1e-10f) {
+                float weight = std::pow(magnitudeMirror, beta);
+                bandGcc[mirrorIdx] = crossSpectrumMirror / weight;
+            }
+        }
+    }
+
+    // Return average magnitude as SNR estimate for this band
+    return (binCount > 0) ? (totalMagnitude / binCount) : 0.0f;
+}
+
+// Find second-highest peak for confidence estimation
+float AudioSync::findSecondPeak(const std::vector<std::complex<float>>& gcc,
+                                 int bestLag, int minLag, int maxLag)
+{
+    float secondPeak = 0.0f;
+    int exclusionZone = SAMPLE_RATE / 100;  // 10ms exclusion around main peak
+
+    for (int lag = minLag; lag < maxLag && lag < static_cast<int>(gcc.size()) / 2; lag++) {
+        // Skip the region around the main peak
+        if (std::abs(lag - bestLag) < exclusionZone) continue;
+
+        float value = gcc[lag].real();
+        if (value > secondPeak) {
+            secondPeak = value;
+        }
+    }
+
+    return secondPeak;
+}
+
+void AudioSync::analyzeWithRobustGccPhat()
+{
+    qDebug() << "Starting ROBUST GCC-PHAT analysis...";
+    qDebug() << "  Improvements: Signal Normalization, VAD, Multiband, PHAT-beta=" << PHAT_BETA;
 
     std::vector<float> radio;
     std::vector<float> websdr;
@@ -195,26 +309,27 @@ void AudioSync::analyzeWithGccPhat()
     }
 
     if (radio.empty() || websdr.empty()) {
-        qDebug() << "GCC-PHAT: Empty buffers";
+        qDebug() << "Robust GCC-PHAT: Empty buffers";
         m_resultReady.store(true);
         return;
     }
 
-    // Step 1: Remove DC offset
-    float radioMean = std::accumulate(radio.begin(), radio.end(), 0.0f) / radio.size();
-    float websdrMean = std::accumulate(websdr.begin(), websdr.end(), 0.0f) / websdr.size();
+    // ========== IMPROVEMENT 1: Signal Normalization ==========
+    // Equalizes volume differences between channels
+    qDebug() << "Step 1: Signal normalization...";
+    float radioRmsBefore = computeRMS(radio);
+    float websdrRmsBefore = computeRMS(websdr);
+    qDebug() << "  Before - Radio RMS:" << radioRmsBefore << ", WebSDR RMS:" << websdrRmsBefore;
 
-    for (auto& s : radio) s -= radioMean;
-    for (auto& s : websdr) s -= websdrMean;
+    normalizeSignal(radio);
+    normalizeSignal(websdr);
 
-    // Check signal levels
-    float radioRMS = computeRMS(radio);
-    float websdrRMS = computeRMS(websdr);
+    float radioRmsAfter = computeRMS(radio);
+    float websdrRmsAfter = computeRMS(websdr);
+    qDebug() << "  After  - Radio RMS:" << radioRmsAfter << ", WebSDR RMS:" << websdrRmsAfter;
 
-    qDebug() << "Signal levels - Radio RMS:" << radioRMS << ", WebSDR RMS:" << websdrRMS;
-
-    if (radioRMS < 0.001f || websdrRMS < 0.001f) {
-        qDebug() << "GCC-PHAT: Signal too weak";
+    if (radioRmsBefore < 0.001f || websdrRmsBefore < 0.001f) {
+        qDebug() << "Robust GCC-PHAT: Signal too weak before normalization";
         std::lock_guard<std::mutex> lock(m_mutex);
         m_result.success = false;
         m_result.confidence = 0.0f;
@@ -222,7 +337,48 @@ void AudioSync::analyzeWithGccPhat()
         return;
     }
 
-    // Step 2: Prepare FFT buffers (zero-pad to FFT size)
+    // ========== IMPROVEMENT 2: Voice Activity Detection (VAD) ==========
+    // Only correlate segments where both channels have speech
+    qDebug() << "Step 2: Voice Activity Detection...";
+    std::vector<bool> radioVad = detectVoiceActivity(radio);
+    std::vector<bool> websdrVad = detectVoiceActivity(websdr);
+
+    // Count active frames in each channel
+    int radioActive = std::count(radioVad.begin(), radioVad.end(), true);
+    int websdrActive = std::count(websdrVad.begin(), websdrVad.end(), true);
+    int totalFrames = static_cast<int>(radioVad.size());
+
+    qDebug() << "  Radio active frames:" << radioActive << "/" << totalFrames
+             << "(" << (100 * radioActive / std::max(1, totalFrames)) << "%)";
+    qDebug() << "  WebSDR active frames:" << websdrActive << "/" << totalFrames
+             << "(" << (100 * websdrActive / std::max(1, totalFrames)) << "%)";
+
+    // Combined VAD mask - require activity in BOTH channels
+    std::vector<bool> combinedVad(totalFrames);
+    int bothActive = 0;
+    for (int i = 0; i < totalFrames; i++) {
+        combinedVad[i] = radioVad[i] && websdrVad[i];
+        if (combinedVad[i]) bothActive++;
+    }
+    qDebug() << "  Both active:" << bothActive << "/" << totalFrames
+             << "(" << (100 * bothActive / std::max(1, totalFrames)) << "%)";
+
+    // Apply VAD mask - zero out inactive segments
+    applyVadMask(radio, combinedVad);
+    applyVadMask(websdr, combinedVad);
+
+    // Check if enough voiced content remains
+    if (bothActive < totalFrames / 10) {  // Less than 10% voiced
+        qDebug() << "Robust GCC-PHAT: Insufficient voiced content in both channels";
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_result.success = false;
+        m_result.confidence = 0.0f;
+        m_resultReady.store(true);
+        return;
+    }
+
+    // ========== FFT PREPARATION ==========
+    qDebug() << "Step 3: FFT preparation (size" << m_fftSize << ")...";
     std::vector<std::complex<float>> radioFFT(m_fftSize, {0.0f, 0.0f});
     std::vector<std::complex<float>> websdrFFT(m_fftSize, {0.0f, 0.0f});
 
@@ -231,83 +387,78 @@ void AudioSync::analyzeWithGccPhat()
         websdrFFT[i] = {websdr[i], 0.0f};
     }
 
-    // Step 3: Perform FFT on both signals
-    qDebug() << "Performing FFT (size" << m_fftSize << ")...";
     fft(radioFFT, false);
     fft(websdrFFT, false);
 
-    // Step 4: Apply frequency-domain bandpass filter (300Hz - 3000Hz)
-    // and compute GCC-PHAT
-    // Frequency bin k corresponds to frequency: k * sampleRate / fftSize
+    // ========== IMPROVEMENT 3 & 4: Multiband GCC-PHAT-beta ==========
+    // Divide spectrum into bands, compute GCC for each, weight by SNR
+    qDebug() << "Step 4: Multiband GCC-PHAT-beta analysis (" << NUM_BANDS << " bands)...";
+
     int lowBin = static_cast<int>(BANDPASS_LOW_HZ * m_fftSize / SAMPLE_RATE);
     int highBin = static_cast<int>(BANDPASS_HIGH_HZ * m_fftSize / SAMPLE_RATE);
+    int bandWidth = (highBin - lowBin) / NUM_BANDS;
 
-    qDebug() << "Bandpass bins:" << lowBin << "to" << highBin
-             << "(frequencies" << BANDPASS_LOW_HZ << "to" << BANDPASS_HIGH_HZ << "Hz)";
+    // Store GCC results for each band
+    std::vector<std::vector<std::complex<float>>> bandGccResults(NUM_BANDS);
+    std::vector<float> bandSnr(NUM_BANDS);
 
-    std::vector<std::complex<float>> gccPhat(m_fftSize, {0.0f, 0.0f});
+    for (int band = 0; band < NUM_BANDS; band++) {
+        int bandLow = lowBin + band * bandWidth;
+        int bandHigh = (band == NUM_BANDS - 1) ? highBin : (bandLow + bandWidth - 1);
 
+        bandGccResults[band].resize(m_fftSize, {0.0f, 0.0f});
+        bandSnr[band] = computeBandGccPhat(radioFFT, websdrFFT, bandLow, bandHigh,
+                                           PHAT_BETA, bandGccResults[band]);
+
+        float bandFreqLow = bandLow * SAMPLE_RATE / static_cast<float>(m_fftSize);
+        float bandFreqHigh = bandHigh * SAMPLE_RATE / static_cast<float>(m_fftSize);
+        qDebug() << "  Band" << band << ":" << bandFreqLow << "-" << bandFreqHigh
+                 << "Hz, SNR estimate:" << bandSnr[band];
+    }
+
+    // Combine bands with SNR-based weighting
+    float totalSnr = 0.0f;
+    for (int band = 0; band < NUM_BANDS; band++) {
+        totalSnr += bandSnr[band];
+    }
+
+    std::vector<std::complex<float>> combinedGcc(m_fftSize, {0.0f, 0.0f});
     for (int i = 0; i < m_fftSize; i++) {
-        // Check if this frequency bin is within the bandpass range
-        // For real signals, we need to consider both positive and negative frequencies
-        int freqBin = (i <= m_fftSize / 2) ? i : (m_fftSize - i);
-
-        bool inBand = (freqBin >= lowBin && freqBin <= highBin);
-
-        if (!inBand) {
-            gccPhat[i] = {0.0f, 0.0f};
-            continue;
-        }
-
-        // Cross-spectrum: WebSDR * conj(Radio)
-        // WebSDR is delayed relative to Radio, so this gives positive lag for the delay
-        std::complex<float> crossSpectrum = websdrFFT[i] * std::conj(radioFFT[i]);
-
-        // PHAT weighting: normalize by magnitude
-        float magnitude = std::abs(crossSpectrum);
-        if (magnitude > 1e-10f) {
-            gccPhat[i] = crossSpectrum / magnitude;
-        } else {
-            gccPhat[i] = {0.0f, 0.0f};
+        for (int band = 0; band < NUM_BANDS; band++) {
+            // Weight each band by its relative SNR
+            float weight = (totalSnr > 1e-10f) ? (bandSnr[band] / totalSnr) : (1.0f / NUM_BANDS);
+            combinedGcc[i] += bandGccResults[band][i] * weight;
         }
     }
 
-    // Step 5: Inverse FFT to get cross-correlation
-    qDebug() << "Performing inverse FFT...";
-    fft(gccPhat, true);
+    // Inverse FFT to get cross-correlation
+    qDebug() << "Step 5: Inverse FFT...";
+    fft(combinedGcc, true);
 
-    // Step 6: Find peak in valid delay range
-    // We're looking for positive lags where WebSDR is behind Radio
-    // Positive lags: indices 0 to maxDelaySamples correspond to delays 0 to MAX_DELAY_MS
+    // ========== PEAK FINDING ==========
+    qDebug() << "Step 6: Peak detection...";
     int maxDelaySamples = static_cast<int>(MAX_DELAY_MS * SAMPLE_RATE / 1000.0f);
+    int minDelaySamples = static_cast<int>(10.0f * SAMPLE_RATE / 1000.0f);
 
-    // Minimum delay to search (skip first 10ms to avoid artifacts at lag 0)
-    int minDelaySamples = static_cast<int>(10.0f * SAMPLE_RATE / 1000.0f);  // 10ms minimum
-
-    float maxCorrelation = -1e30f;  // Start with very negative to find actual peak
+    float maxCorrelation = -1e30f;
     int bestLag = 0;
 
-    qDebug() << "Searching lags from" << minDelaySamples << "to" << maxDelaySamples << "samples";
-
     // Search positive lags (WebSDR delayed behind Radio)
-    // These are at indices 0 to maxDelaySamples in the IFFT result
     for (int lag = minDelaySamples; lag < maxDelaySamples && lag < m_fftSize / 2; lag++) {
-        float corrValue = gccPhat[lag].real();
+        float corrValue = combinedGcc[lag].real();
         if (corrValue > maxCorrelation) {
             maxCorrelation = corrValue;
             bestLag = lag;
         }
     }
 
-    // Also check if maybe the correlation is in the "negative" lag region
-    // (wrapped around at the end of the FFT result)
-    // This would mean Radio is behind WebSDR (unusual but check anyway)
+    // Also check negative lags
     float maxNegCorrelation = -1e30f;
     int bestNegLag = 0;
     for (int lag = minDelaySamples; lag < maxDelaySamples && lag < m_fftSize / 2; lag++) {
         int idx = m_fftSize - lag;
         if (idx >= 0 && idx < m_fftSize) {
-            float corrValue = gccPhat[idx].real();
+            float corrValue = combinedGcc[idx].real();
             if (corrValue > maxNegCorrelation) {
                 maxNegCorrelation = corrValue;
                 bestNegLag = lag;
@@ -315,36 +466,41 @@ void AudioSync::analyzeWithGccPhat()
         }
     }
 
-    qDebug() << "Best positive lag:" << bestLag << "with correlation:" << maxCorrelation;
-    qDebug() << "Best negative lag:" << bestNegLag << "with correlation:" << maxNegCorrelation;
+    qDebug() << "  Best positive lag:" << bestLag << "with correlation:" << maxCorrelation;
+    qDebug() << "  Best negative lag:" << bestNegLag << "with correlation:" << maxNegCorrelation;
 
-    // Use whichever has better correlation
-    // But prefer positive lag since WebSDR should be behind Radio
     float finalCorrelation = maxCorrelation;
     int finalLag = bestLag;
 
     if (maxNegCorrelation > maxCorrelation * 1.5f) {
-        // Only use negative lag if it's significantly better
-        qDebug() << "Warning: Negative lag has better correlation - unusual configuration";
+        qDebug() << "  Warning: Using negative lag (unusual configuration)";
         finalCorrelation = maxNegCorrelation;
         finalLag = bestNegLag;
     }
 
-    // Calculate confidence based on peak sharpness
-    // Find the average correlation value for comparison
+    // ========== IMPROVED CONFIDENCE ESTIMATION ==========
+    // Use peak-to-second-peak ratio instead of just peak-to-average
+    float secondPeak = findSecondPeak(combinedGcc, finalLag, minDelaySamples, maxDelaySamples);
+
+    // Peak-to-second-peak ratio (better confidence metric)
+    float peakToSecondRatio = (secondPeak > 1e-10f) ? (finalCorrelation / secondPeak) : 10.0f;
+
+    // Also compute peak-to-average for backup
     float sumCorr = 0.0f;
     int countCorr = 0;
     for (int i = minDelaySamples; i < maxDelaySamples && i < m_fftSize / 2; i++) {
-        sumCorr += std::abs(gccPhat[i].real());
+        sumCorr += std::abs(combinedGcc[i].real());
         countCorr++;
     }
     float avgCorr = (countCorr > 0) ? (sumCorr / countCorr) : 1e-10f;
+    float peakToAvgRatio = (avgCorr > 1e-10f) ? (finalCorrelation / avgCorr) : 0.0f;
 
-    // Peak-to-average ratio
-    float peakRatio = (avgCorr > 1e-10f) ? (finalCorrelation / avgCorr) : 0.0f;
-
-    // Normalize confidence (ratio of 5+ is good, 10+ is excellent)
-    float confidence = std::min(1.0f, std::max(0.0f, (peakRatio - 1.0f) / 9.0f));
+    // Combined confidence: use the more conservative of the two metrics
+    // Peak-to-second ratio > 2.0 is good, > 3.0 is excellent
+    float conf1 = std::min(1.0f, std::max(0.0f, (peakToSecondRatio - 1.0f) / 3.0f));
+    // Peak-to-average ratio > 5 is good, > 10 is excellent
+    float conf2 = std::min(1.0f, std::max(0.0f, (peakToAvgRatio - 1.0f) / 9.0f));
+    float confidence = std::min(conf1, conf2);
 
     // Convert lag to milliseconds
     float delayMs = static_cast<float>(finalLag) * 1000.0f / SAMPLE_RATE;
@@ -358,11 +514,12 @@ void AudioSync::analyzeWithGccPhat()
 
     m_resultReady.store(true);
 
-    qDebug() << "GCC-PHAT complete:";
-    qDebug() << "  - Best lag:" << finalLag << "samples =" << delayMs << "ms";
-    qDebug() << "  - Correlation value:" << finalCorrelation;
-    qDebug() << "  - Average correlation:" << avgCorr;
-    qDebug() << "  - Peak ratio:" << peakRatio;
-    qDebug() << "  - Confidence:" << (confidence * 100.0f) << "%";
-    qDebug() << "  - Success:" << m_result.success;
+    qDebug() << "=== ROBUST GCC-PHAT COMPLETE ===";
+    qDebug() << "  Delay:" << delayMs << "ms (" << finalLag << " samples)";
+    qDebug() << "  Peak correlation:" << finalCorrelation;
+    qDebug() << "  Second peak:" << secondPeak;
+    qDebug() << "  Peak-to-second ratio:" << peakToSecondRatio;
+    qDebug() << "  Peak-to-average ratio:" << peakToAvgRatio;
+    qDebug() << "  Confidence:" << (confidence * 100.0f) << "%";
+    qDebug() << "  Success:" << m_result.success;
 }

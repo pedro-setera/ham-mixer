@@ -48,10 +48,14 @@ Whether you're chasing DX, monitoring propagation, or comparing reception betwee
 - **S-Meter extraction** - Real-time signal level from SDR
 
 ### Time Synchronization
-- **GCC-PHAT algorithm** - Professional-grade delay detection
+- **Robust GCC-PHAT algorithm** - Enhanced delay detection with 4 robustness improvements:
+  - **Signal Normalization** - Handles volume differences between channels
+  - **Voice Activity Detection (VAD)** - Only correlates speech segments for better accuracy
+  - **Multiband Analysis** - Weights reliable frequency bands, ignores noisy ones
+  - **GCC-PHAT-beta** - Adjustable whitening (beta=0.7) for noise-robust correlation
 - **Auto-sync button** - Automatically align audio streams (2-second capture)
 - **Manual delay control** - 0-2000ms adjustable delay for distant SDR sites
-- **Compensates for internet latency** between local and remote audio
+- **Handles challenging conditions** - QSB (fading), QRM (interference), volume differences
 
 ### Configuration Management
 - **Save/Load configurations** - Save your complete setup to custom config files
