@@ -36,7 +36,7 @@ public:
 
     static constexpr int SAMPLE_RATE = 48000;
     static constexpr float CAPTURE_SECONDS = 1.5f;  // 1.5 second capture - sweet spot for short CQ calls
-    static constexpr float CAPTURE_SECONDS_CW = 3.0f;  // 3.0 seconds for CW - longer to capture unique patterns and avoid false matches
+    static constexpr float CAPTURE_SECONDS_CW = 2.0f;  // 2.0 seconds for CW
     static constexpr int MAX_DELAY_MS = 2000;       // Max search window (matches delay slider)
     static constexpr float MIN_CONFIDENCE = 0.05f;  // Minimum correlation for success
 

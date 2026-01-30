@@ -50,7 +50,7 @@ Whether you're chasing DX, monitoring propagation, or comparing reception betwee
 ### Time Synchronization
 - **Automatic Voice/CW mode detection** - Sync algorithm adapts based on radio's operating mode:
   - **Voice mode (SSB/AM/FM)** - Uses VAD, 300-3000 Hz bandpass, 1.5s capture
-  - **CW mode (CW/RTTY)** - Envelope correlation on keying pattern (1-100 Hz baseband), 3.0s capture
+  - **CW mode (CW/RTTY)** - Envelope correlation on keying pattern (1-100 Hz baseband), 2.0s capture
 - **Robust GCC-PHAT algorithm** - Enhanced delay detection with 6 robustness improvements:
   - **Signal Normalization** - Equalizes volume differences between channels
   - **Voice Activity Detection (VAD)** - Only correlates speech segments in Voice mode (threshold 0.005 RMS)
