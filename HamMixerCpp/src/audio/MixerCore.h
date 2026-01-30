@@ -101,7 +101,7 @@ public:
     void reset();
 
     // Audio sync methods
-    void startSyncCapture();
+    void startSyncCapture(AudioSync::SignalMode mode = AudioSync::VOICE);
     void cancelSyncCapture();
     bool isSyncCapturing() const;
     float getSyncProgress() const;

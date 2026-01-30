@@ -15,22 +15,39 @@
  * with multiple robustness improvements for challenging ham radio conditions:
  *
  * 1. Signal Normalization - equalizes volume differences
- * 2. Voice Activity Detection (VAD) - only correlates speech segments
+ * 2. Voice Activity Detection (VAD) - only correlates speech segments (Voice mode)
  * 3. Multiband Analysis - weights reliable frequency bands
  * 4. GCC-PHAT-beta - adjustable whitening for noise robustness
+ * 5. Envelope Correlation - pitch-independent for CW mode
  *
  * Handles QSB (fading), QRM (interference), and volume differences.
+ * Automatically adapts to Voice (SSB/AM/FM) or CW mode based on radio setting.
  */
 class AudioSync {
 public:
+    /**
+     * @brief Signal mode for sync algorithm selection
+     * Automatically determined from radio's current operating mode
+     */
+    enum SignalMode {
+        VOICE,  // SSB, AM, FM - uses VAD, wider bandpass (300-3000 Hz)
+        CW      // CW, RTTY - no VAD, narrower bandpass (400-1000 Hz), envelope correlation
+    };
+
     static constexpr int SAMPLE_RATE = 48000;
     static constexpr float CAPTURE_SECONDS = 1.5f;  // 1.5 second capture - sweet spot for short CQ calls
+    static constexpr float CAPTURE_SECONDS_CW = 1.0f;  // 1.0 second for CW (patterns repeat faster)
     static constexpr int MAX_DELAY_MS = 2000;       // Max search window (matches delay slider)
     static constexpr float MIN_CONFIDENCE = 0.05f;  // Minimum correlation for success
 
     // Bandpass filter for voice frequencies (300Hz - 3000Hz)
     static constexpr float BANDPASS_LOW_HZ = 300.0f;
     static constexpr float BANDPASS_HIGH_HZ = 3000.0f;
+
+    // Bandpass filter for CW frequencies (400Hz - 1000Hz)
+    // Covers common CW pitch preferences from low (400 Hz) to high (1000 Hz)
+    static constexpr float CW_BANDPASS_LOW_HZ = 400.0f;
+    static constexpr float CW_BANDPASS_HIGH_HZ = 1000.0f;
 
     // === ROBUSTNESS PARAMETERS ===
 
@@ -63,8 +80,9 @@ public:
 
     /**
      * @brief Start capturing audio for sync analysis
+     * @param mode Signal mode (VOICE or CW) - determines algorithm parameters
      */
-    void startCapture();
+    void startCapture(SignalMode mode = VOICE);
 
     /**
      * @brief Check if capture is in progress
@@ -111,6 +129,9 @@ private:
 
     int m_targetSamples;
     int m_fftSize;
+
+    // Current signal mode (Voice or CW) - set at capture start
+    SignalMode m_signalMode{VOICE};
 
     // Main analysis with all robustness improvements
     void analyzeWithRobustGccPhat();

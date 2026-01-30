@@ -3,6 +3,7 @@
 #include "ui/WebSdrManagerDialog.h"
 #include "ui/AudioDevicesDialog.h"
 #include "audio/MixerCore.h"
+#include "audio/AudioSync.h"
 #include "serial/CIVProtocol.h"
 #include "HamMixer/Version.h"
 #include <algorithm>
@@ -496,8 +497,28 @@ void MainWindow::onAutoSyncClicked()
         return;
     }
 
-    // Start sync capture
-    mixer->startSyncCapture();
+    // Determine sync mode based on radio's current operating mode
+    // CW and RTTY modes use tone-based (CW) sync algorithm
+    // All other modes (SSB, AM, FM) use voice-based sync algorithm
+    AudioSync::SignalMode syncMode = AudioSync::VOICE;  // Default
+
+    if (m_radioController) {
+        uint8_t radioMode = m_radioController->currentMode();
+
+        // CW modes use envelope correlation (pitch-independent)
+        if (radioMode == CIVProtocol::MODE_CW ||
+            radioMode == CIVProtocol::MODE_CW_R ||
+            radioMode == CIVProtocol::MODE_RTTY ||
+            radioMode == CIVProtocol::MODE_RTTY_R) {
+            syncMode = AudioSync::CW;
+            qDebug() << "Auto-Sync: Using CW mode (tone-based, pitch-independent)";
+        } else {
+            qDebug() << "Auto-Sync: Using VOICE mode (VAD-based)";
+        }
+    }
+
+    // Start sync capture with the appropriate mode
+    mixer->startSyncCapture(syncMode);
     m_autoSyncButton->setText("Syncing...");
 
     // Start timer to monitor progress

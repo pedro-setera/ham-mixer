@@ -46,7 +46,7 @@ float AudioSync::computeRMS(const std::vector<float>& signal)
     return std::sqrt(sumSq / signal.size());
 }
 
-void AudioSync::startCapture()
+void AudioSync::startCapture(SignalMode mode)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -54,15 +54,28 @@ void AudioSync::startCapture()
         return;
     }
 
+    // Store the signal mode for analysis phase
+    m_signalMode = mode;
+
+    // Adjust capture duration based on mode (CW is shorter - patterns repeat faster)
+    float captureSeconds = (mode == CW) ? CAPTURE_SECONDS_CW : CAPTURE_SECONDS;
+    m_targetSamples = static_cast<int>(SAMPLE_RATE * captureSeconds);
+    m_fftSize = nextPowerOf2(m_targetSamples * 2);
+
     // Clear previous data
     m_radioBuffer.clear();
     m_websdrBuffer.clear();
+    m_radioBuffer.reserve(m_targetSamples);
+    m_websdrBuffer.reserve(m_targetSamples);
     m_capturedSamples.store(0);
     m_resultReady.store(false);
     m_result = SyncResult();
 
     m_capturing.store(true);
-    qDebug() << "GCC-PHAT audio sync capture started (2 second window)";
+
+    const char* modeStr = (mode == CW) ? "CW" : "VOICE";
+    qDebug() << "GCC-PHAT audio sync capture started - Mode:" << modeStr
+             << ", Duration:" << captureSeconds << "s";
 }
 
 void AudioSync::addSamples(const float* radioSamples, const float* websdrSamples, int count)
@@ -355,9 +368,18 @@ float AudioSync::findSecondPeak(const std::vector<std::complex<float>>& gcc,
 
 void AudioSync::analyzeWithRobustGccPhat()
 {
+    const char* modeStr = (m_signalMode == CW) ? "CW" : "VOICE";
+    float captureSeconds = (m_signalMode == CW) ? CAPTURE_SECONDS_CW : CAPTURE_SECONDS;
+
     qDebug() << "Starting ROBUST GCC-PHAT analysis...";
-    qDebug() << "  Capture:" << CAPTURE_SECONDS << "s, VAD threshold:" << VAD_THRESHOLD;
-    qDebug() << "  Improvements: Normalization, VAD, Envelope (Hilbert), Multiband, PHAT-beta=" << PHAT_BETA;
+    qDebug() << "  Mode:" << modeStr << ", Capture:" << captureSeconds << "s";
+    if (m_signalMode == CW) {
+        qDebug() << "  CW mode: Bandpass" << CW_BANDPASS_LOW_HZ << "-" << CW_BANDPASS_HIGH_HZ << "Hz, VAD DISABLED";
+        qDebug() << "  Improvements: Normalization, Envelope (Hilbert), Multiband, PHAT-beta=" << PHAT_BETA;
+    } else {
+        qDebug() << "  Voice mode: Bandpass" << BANDPASS_LOW_HZ << "-" << BANDPASS_HIGH_HZ << "Hz, VAD threshold:" << VAD_THRESHOLD;
+        qDebug() << "  Improvements: Normalization, VAD, Envelope (Hilbert), Multiband, PHAT-beta=" << PHAT_BETA;
+    }
 
     std::vector<float> radio;
     std::vector<float> websdr;
@@ -398,43 +420,47 @@ void AudioSync::analyzeWithRobustGccPhat()
     }
 
     // ========== IMPROVEMENT 2: Voice Activity Detection (VAD) ==========
-    // Only correlate segments where both channels have speech
-    qDebug() << "Step 2: Voice Activity Detection...";
-    std::vector<bool> radioVad = detectVoiceActivity(radio);
-    std::vector<bool> websdrVad = detectVoiceActivity(websdr);
+    // Only for VOICE mode - CW mode skips VAD (tone is either on or off)
+    if (m_signalMode == VOICE) {
+        qDebug() << "Step 2: Voice Activity Detection...";
+        std::vector<bool> radioVad = detectVoiceActivity(radio);
+        std::vector<bool> websdrVad = detectVoiceActivity(websdr);
 
-    // Count active frames in each channel
-    int radioActive = std::count(radioVad.begin(), radioVad.end(), true);
-    int websdrActive = std::count(websdrVad.begin(), websdrVad.end(), true);
-    int totalFrames = static_cast<int>(radioVad.size());
+        // Count active frames in each channel
+        int radioActive = std::count(radioVad.begin(), radioVad.end(), true);
+        int websdrActive = std::count(websdrVad.begin(), websdrVad.end(), true);
+        int totalFrames = static_cast<int>(radioVad.size());
 
-    qDebug() << "  Radio active frames:" << radioActive << "/" << totalFrames
-             << "(" << (100 * radioActive / std::max(1, totalFrames)) << "%)";
-    qDebug() << "  WebSDR active frames:" << websdrActive << "/" << totalFrames
-             << "(" << (100 * websdrActive / std::max(1, totalFrames)) << "%)";
+        qDebug() << "  Radio active frames:" << radioActive << "/" << totalFrames
+                 << "(" << (100 * radioActive / std::max(1, totalFrames)) << "%)";
+        qDebug() << "  WebSDR active frames:" << websdrActive << "/" << totalFrames
+                 << "(" << (100 * websdrActive / std::max(1, totalFrames)) << "%)";
 
-    // Combined VAD mask - require activity in BOTH channels
-    std::vector<bool> combinedVad(totalFrames);
-    int bothActive = 0;
-    for (int i = 0; i < totalFrames; i++) {
-        combinedVad[i] = radioVad[i] && websdrVad[i];
-        if (combinedVad[i]) bothActive++;
-    }
-    qDebug() << "  Both active:" << bothActive << "/" << totalFrames
-             << "(" << (100 * bothActive / std::max(1, totalFrames)) << "%)";
+        // Combined VAD mask - require activity in BOTH channels
+        std::vector<bool> combinedVad(totalFrames);
+        int bothActive = 0;
+        for (int i = 0; i < totalFrames; i++) {
+            combinedVad[i] = radioVad[i] && websdrVad[i];
+            if (combinedVad[i]) bothActive++;
+        }
+        qDebug() << "  Both active:" << bothActive << "/" << totalFrames
+                 << "(" << (100 * bothActive / std::max(1, totalFrames)) << "%)";
 
-    // Apply VAD mask - zero out inactive segments
-    applyVadMask(radio, combinedVad);
-    applyVadMask(websdr, combinedVad);
+        // Apply VAD mask - zero out inactive segments
+        applyVadMask(radio, combinedVad);
+        applyVadMask(websdr, combinedVad);
 
-    // Check if enough voiced content remains
-    if (bothActive < totalFrames / 10) {  // Less than 10% voiced
-        qDebug() << "Robust GCC-PHAT: Insufficient voiced content in both channels";
-        std::lock_guard<std::mutex> lock(m_mutex);
-        m_result.success = false;
-        m_result.confidence = 0.0f;
-        m_resultReady.store(true);
-        return;
+        // Check if enough voiced content remains
+        if (bothActive < totalFrames / 10) {  // Less than 10% voiced
+            qDebug() << "Robust GCC-PHAT: Insufficient voiced content in both channels";
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_result.success = false;
+            m_result.confidence = 0.0f;
+            m_resultReady.store(true);
+            return;
+        }
+    } else {
+        qDebug() << "Step 2: VAD SKIPPED (CW mode - using envelope correlation)";
     }
 
     // ========== IMPROVEMENT: Envelope Extraction (Hilbert Transform) ==========
@@ -462,10 +488,15 @@ void AudioSync::analyzeWithRobustGccPhat()
 
     // ========== IMPROVEMENT 3 & 4: Multiband GCC-PHAT-beta ==========
     // Divide spectrum into bands, compute GCC for each, weight by SNR
-    qDebug() << "Step 4: Multiband GCC-PHAT-beta analysis (" << NUM_BANDS << " bands)...";
+    // Use mode-dependent bandpass frequencies
+    float bpLow = (m_signalMode == CW) ? CW_BANDPASS_LOW_HZ : BANDPASS_LOW_HZ;
+    float bpHigh = (m_signalMode == CW) ? CW_BANDPASS_HIGH_HZ : BANDPASS_HIGH_HZ;
 
-    int lowBin = static_cast<int>(BANDPASS_LOW_HZ * m_fftSize / SAMPLE_RATE);
-    int highBin = static_cast<int>(BANDPASS_HIGH_HZ * m_fftSize / SAMPLE_RATE);
+    qDebug() << "Step 4: Multiband GCC-PHAT-beta analysis (" << NUM_BANDS << " bands)...";
+    qDebug() << "  Bandpass:" << bpLow << "-" << bpHigh << "Hz";
+
+    int lowBin = static_cast<int>(bpLow * m_fftSize / SAMPLE_RATE);
+    int highBin = static_cast<int>(bpHigh * m_fftSize / SAMPLE_RATE);
     int bandWidth = (highBin - lowBin) / NUM_BANDS;
 
     // Store GCC results for each band

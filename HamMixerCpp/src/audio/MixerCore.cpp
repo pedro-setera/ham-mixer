@@ -346,10 +346,10 @@ void MixerCore::reset()
 }
 
 // Audio sync methods
-void MixerCore::startSyncCapture()
+void MixerCore::startSyncCapture(AudioSync::SignalMode mode)
 {
     if (m_audioSync) {
-        m_audioSync->startCapture();
+        m_audioSync->startCapture(mode);
     }
 }
 
