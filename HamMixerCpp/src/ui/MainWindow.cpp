@@ -31,6 +31,8 @@ MainWindow::MainWindow(QWidget* parent)
     , m_websdrSMeterDb(-80.0f)
     , m_websdrSmeterValid(false)
     , m_recentConfigsMenu(nullptr)
+    , m_browserGroup(nullptr)
+    , m_showWebSdrViewAction(nullptr)
 {
     // Start S-meter delay timer
     m_smeterTimer.start();
@@ -275,21 +277,21 @@ void MainWindow::setupUI()
     mainLayout->addLayout(contentLayout);
 
     // ========== Embedded WebSDR Browser (bottom section) ==========
-    QGroupBox* browserGroup = new QGroupBox("WebSDR Browser", this);
-    browserGroup->setFixedHeight(450);  // +50px more for KiwiSDR browser room
-    browserGroup->setContentsMargins(0, 0, 0, 0);  // Remove group box margins
-    QVBoxLayout* browserLayout = new QVBoxLayout(browserGroup);
+    m_browserGroup = new QGroupBox("WebSDR Browser", this);
+    m_browserGroup->setFixedHeight(450);  // +50px more for KiwiSDR browser room
+    m_browserGroup->setContentsMargins(0, 0, 0, 0);  // Remove group box margins
+    QVBoxLayout* browserLayout = new QVBoxLayout(m_browserGroup);
     browserLayout->setContentsMargins(5, 0, 5, 5);  // Reduced top margin to avoid double spacing
 
     // Create a container widget for the browser with its own layout
-    QWidget* browserContainer = new QWidget(browserGroup);
+    QWidget* browserContainer = new QWidget(m_browserGroup);
     browserContainer->setMinimumHeight(360);  // +50px more for KiwiSDR
     QVBoxLayout* containerLayout = new QVBoxLayout(browserContainer);
     containerLayout->setContentsMargins(0, 0, 0, 0);
     containerLayout->setSpacing(0);
     browserLayout->addWidget(browserContainer);
 
-    mainLayout->addWidget(browserGroup);
+    mainLayout->addWidget(m_browserGroup);
 
     // Create WebSDR manager with the browser container for embedded mode
     m_webSdrManager = new WebSdrManager(browserContainer, this);
@@ -321,6 +323,14 @@ void MainWindow::setupMenuBar()
 
     toolsMenu->addAction("&Audio Devices...", this, &MainWindow::onAudioDevicesClicked);
     toolsMenu->addAction("Manage &SDR Sites...", this, &MainWindow::onManageWebSdr);
+
+    toolsMenu->addSeparator();
+
+    // Toggle for showing/hiding WebSDR browser view (compact mode)
+    m_showWebSdrViewAction = toolsMenu->addAction("Show &WebSDR View");
+    m_showWebSdrViewAction->setCheckable(true);
+    m_showWebSdrViewAction->setChecked(true);  // Default: shown
+    connect(m_showWebSdrViewAction, &QAction::toggled, this, &MainWindow::onToggleWebSdrView);
 
     // ===== Help Menu =====
     QMenu* helpMenu = menuBar()->addMenu("&Help");
@@ -460,6 +470,20 @@ void MainWindow::applySettingsToUI()
     m_webSdrManager->setSiteList(m_settings.webSdrSites());
     m_radioControlPanel->setSiteList(m_settings.webSdrSites());
     m_radioControlPanel->setSelectedSite(m_settings.webSdr().selectedSiteId);
+
+    // Apply WebSDR browser view state (compact/full mode)
+    if (m_showWebSdrViewAction && m_browserGroup) {
+        bool showBrowser = m_settings.webSdr().showBrowser;
+        m_showWebSdrViewAction->blockSignals(true);
+        m_showWebSdrViewAction->setChecked(showBrowser);
+        m_showWebSdrViewAction->blockSignals(false);
+
+        if (!showBrowser) {
+            // Start in compact mode
+            m_browserGroup->hide();
+            setMinimumSize(1200, 420);
+        }
+    }
 
     // Clear dirty flag since we just loaded/applied settings
     m_settings.clearDirty();
@@ -1530,6 +1554,38 @@ void MainWindow::onAudioDevicesClicked()
         qDebug() << "Audio devices updated - Input:" << inputName
                  << "Loopback:" << loopbackName << "Output:" << outputName;
     }
+}
+
+void MainWindow::onToggleWebSdrView(bool checked)
+{
+    if (!m_browserGroup) return;
+
+    // Update setting
+    m_settings.webSdr().showBrowser = checked;
+
+    if (checked) {
+        // Show WebSDR browser view (full mode)
+        m_browserGroup->show();
+        setMinimumSize(1200, 876);
+
+        // Restore window size if it was shrunk
+        QSize currentSize = size();
+        if (currentSize.height() < 876) {
+            resize(currentSize.width(), 876);
+        }
+    } else {
+        // Hide WebSDR browser view (compact mode)
+        m_browserGroup->hide();
+        setMinimumSize(1200, 420);
+
+        // Shrink window to fit compact layout
+        adjustSize();
+    }
+
+    // Mark settings as dirty so the view preference is saved
+    m_settings.markDirty();
+
+    qDebug() << "WebSDR view toggled:" << (checked ? "shown" : "hidden");
 }
 
 float MainWindow::getDelayedSMeterValue() const

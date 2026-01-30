@@ -8,6 +8,8 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QMenu>
+#include <QAction>
+#include <QGroupBox>
 #include <memory>
 #include <deque>
 
@@ -64,6 +66,9 @@ private slots:
 
     // Settings dialogs
     void onAudioDevicesClicked();
+
+    // View toggle
+    void onToggleWebSdrView(bool checked);
 
     // Config file management
     void onSaveConfig();
@@ -143,6 +148,10 @@ private:
 
     // Config menu
     QMenu* m_recentConfigsMenu;
+
+    // WebSDR browser view toggle
+    QGroupBox* m_browserGroup;
+    QAction* m_showWebSdrViewAction;
 
     void setupWindow();
     void setupUI();

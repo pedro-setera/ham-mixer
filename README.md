@@ -47,6 +47,7 @@ Whether you're chasing DX, monitoring propagation, or comparing reception betwee
 - **Multiple sites** - Switch between receivers worldwide
 - **Automatic band selection** - SDR changes bands with your radio
 - **Embedded browser** - SDR waterfall displayed within the main application
+- **Compact/Full view** - Hide WebSDR browser for minimal interface (Tools > Show WebSDR View)
 - **S-Meter extraction** - Real-time signal level from SDR
 
 ### Time Synchronization
@@ -146,7 +147,7 @@ You can add custom SDR sites through **File > Manage WebSDR...** menu.
 
 ### Menu Structure
 - **File**: Open Config, Save Config, Open Recent, Exit
-- **Tools**: Audio Devices, Manage SDR Sites
+- **Tools**: Audio Devices, Manage SDR Sites, Show WebSDR View (toggle)
 - **Help**: About
 
 ---
