@@ -427,7 +427,13 @@ void MainWindow::applySettingsToUI()
 {
     // Apply current m_settings to UI widgets (without reloading from file)
     m_delaySlider->setValue(m_settings.channel1().delayMs);
+
+    // Block signals when restoring toggle state to prevent starting timers
+    // Auto-sync will only actually start when user connects and toggle is checked
+    m_autoSyncToggle->blockSignals(true);
     m_autoSyncToggle->setChecked(m_settings.channel1().autoSyncEnabled);
+    m_autoSyncToggle->blockSignals(false);
+
     m_masterStrip->setVolume(m_settings.master().volume);
     m_masterStrip->setMuted(m_settings.master().muted);
     m_radioStrip->setMuted(m_settings.channel1().muted);
