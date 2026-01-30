@@ -230,6 +230,48 @@ void AudioSync::applyVadMask(std::vector<float>& signal, const std::vector<bool>
     }
 }
 
+// Extract amplitude envelope using Hilbert transform
+// More robust to phase distortions from QSB/fading
+void AudioSync::extractEnvelope(std::vector<float>& signal)
+{
+    if (signal.empty()) return;
+
+    // Pad to power of 2 for FFT
+    int n = nextPowerOf2(static_cast<int>(signal.size()));
+    std::vector<std::complex<float>> fftData(n, {0.0f, 0.0f});
+
+    // Copy signal to complex buffer
+    for (size_t i = 0; i < signal.size(); i++) {
+        fftData[i] = {signal[i], 0.0f};
+    }
+
+    // Forward FFT
+    fft(fftData, false);
+
+    // Create analytic signal by zeroing negative frequencies
+    // and doubling positive frequencies
+    // Index 0 = DC (keep as is)
+    // Indices 1 to n/2-1 = positive frequencies (double them)
+    // Index n/2 = Nyquist (keep as is)
+    // Indices n/2+1 to n-1 = negative frequencies (zero them)
+
+    for (int i = 1; i < n / 2; i++) {
+        fftData[i] *= 2.0f;  // Double positive frequencies
+    }
+    // DC (index 0) and Nyquist (index n/2) stay the same
+    for (int i = n / 2 + 1; i < n; i++) {
+        fftData[i] = {0.0f, 0.0f};  // Zero negative frequencies
+    }
+
+    // Inverse FFT to get analytic signal
+    fft(fftData, true);
+
+    // Extract envelope as magnitude of analytic signal
+    for (size_t i = 0; i < signal.size(); i++) {
+        signal[i] = std::abs(fftData[i]);
+    }
+}
+
 // Compute GCC-PHAT-beta for a frequency band, returns band SNR estimate
 float AudioSync::computeBandGccPhat(
     const std::vector<std::complex<float>>& radioFFT,
@@ -275,19 +317,36 @@ float AudioSync::computeBandGccPhat(
 }
 
 // Find second-highest peak for confidence estimation
+// Searches both positive and negative lag regions
 float AudioSync::findSecondPeak(const std::vector<std::complex<float>>& gcc,
-                                 int bestLag, int minLag, int maxLag)
+                                 int bestLagIndex, int minLag, int maxLag)
 {
     float secondPeak = 0.0f;
     int exclusionZone = SAMPLE_RATE / 100;  // 10ms exclusion around main peak
+    int fftSize = static_cast<int>(gcc.size());
 
-    for (int lag = minLag; lag < maxLag && lag < static_cast<int>(gcc.size()) / 2; lag++) {
+    // Search positive lags
+    for (int lag = minLag; lag < maxLag && lag < fftSize / 2; lag++) {
         // Skip the region around the main peak
-        if (std::abs(lag - bestLag) < exclusionZone) continue;
+        if (std::abs(lag - bestLagIndex) < exclusionZone) continue;
 
         float value = gcc[lag].real();
         if (value > secondPeak) {
             secondPeak = value;
+        }
+    }
+
+    // Search negative lags (wrapped around at end of FFT)
+    for (int lag = minLag; lag < maxLag && lag < fftSize / 2; lag++) {
+        int idx = fftSize - lag;
+        if (idx >= 0 && idx < fftSize) {
+            // Skip the region around the main peak
+            if (std::abs(idx - bestLagIndex) < exclusionZone) continue;
+
+            float value = gcc[idx].real();
+            if (value > secondPeak) {
+                secondPeak = value;
+            }
         }
     }
 
@@ -297,7 +356,8 @@ float AudioSync::findSecondPeak(const std::vector<std::complex<float>>& gcc,
 void AudioSync::analyzeWithRobustGccPhat()
 {
     qDebug() << "Starting ROBUST GCC-PHAT analysis...";
-    qDebug() << "  Improvements: Signal Normalization, VAD, Multiband, PHAT-beta=" << PHAT_BETA;
+    qDebug() << "  Capture:" << CAPTURE_SECONDS << "s, VAD threshold:" << VAD_THRESHOLD;
+    qDebug() << "  Improvements: Normalization, VAD, Envelope (Hilbert), Multiband, PHAT-beta=" << PHAT_BETA;
 
     std::vector<float> radio;
     std::vector<float> websdr;
@@ -377,6 +437,16 @@ void AudioSync::analyzeWithRobustGccPhat()
         return;
     }
 
+    // ========== IMPROVEMENT: Envelope Extraction (Hilbert Transform) ==========
+    // Extract amplitude envelope - more robust to phase distortions from QSB/fading
+    qDebug() << "Step 2.5: Envelope extraction (Hilbert transform)...";
+    extractEnvelope(radio);
+    extractEnvelope(websdr);
+
+    // Re-normalize after envelope extraction
+    normalizeSignal(radio);
+    normalizeSignal(websdr);
+
     // ========== FFT PREPARATION ==========
     qDebug() << "Step 3: FFT preparation (size" << m_fftSize << ")...";
     std::vector<std::complex<float>> radioFFT(m_fftSize, {0.0f, 0.0f});
@@ -435,26 +505,29 @@ void AudioSync::analyzeWithRobustGccPhat()
     qDebug() << "Step 5: Inverse FFT...";
     fft(combinedGcc, true);
 
-    // ========== PEAK FINDING ==========
-    qDebug() << "Step 6: Peak detection...";
+    // ========== PEAK FINDING (SYMMETRIC - NO BIAS) ==========
+    // Search both positive and negative lags equally
+    qDebug() << "Step 6: Peak detection (symmetric search)...";
     int maxDelaySamples = static_cast<int>(MAX_DELAY_MS * SAMPLE_RATE / 1000.0f);
     int minDelaySamples = static_cast<int>(10.0f * SAMPLE_RATE / 1000.0f);
 
-    float maxCorrelation = -1e30f;
-    int bestLag = 0;
+    float maxPosCorrelation = -1e30f;
+    int bestPosLag = 0;
 
-    // Search positive lags (WebSDR delayed behind Radio)
+    // Search positive lags (WebSDR delayed behind Radio - need to ADD delay)
     for (int lag = minDelaySamples; lag < maxDelaySamples && lag < m_fftSize / 2; lag++) {
         float corrValue = combinedGcc[lag].real();
-        if (corrValue > maxCorrelation) {
-            maxCorrelation = corrValue;
-            bestLag = lag;
+        if (corrValue > maxPosCorrelation) {
+            maxPosCorrelation = corrValue;
+            bestPosLag = lag;
         }
     }
 
-    // Also check negative lags
     float maxNegCorrelation = -1e30f;
     int bestNegLag = 0;
+
+    // Search negative lags (WebSDR ahead of Radio - need to REDUCE delay)
+    // Negative lags appear at the end of the FFT result (wrapped around)
     for (int lag = minDelaySamples; lag < maxDelaySamples && lag < m_fftSize / 2; lag++) {
         int idx = m_fftSize - lag;
         if (idx >= 0 && idx < m_fftSize) {
@@ -466,31 +539,49 @@ void AudioSync::analyzeWithRobustGccPhat()
         }
     }
 
-    qDebug() << "  Best positive lag:" << bestLag << "with correlation:" << maxCorrelation;
-    qDebug() << "  Best negative lag:" << bestNegLag << "with correlation:" << maxNegCorrelation;
+    qDebug() << "  Best positive lag:" << bestPosLag << "samples, correlation:" << maxPosCorrelation;
+    qDebug() << "  Best negative lag:" << bestNegLag << "samples, correlation:" << maxNegCorrelation;
 
-    float finalCorrelation = maxCorrelation;
-    int finalLag = bestLag;
+    // Choose the direction with better correlation - NO BIAS
+    float finalCorrelation;
+    int finalLagMagnitude;
+    bool isNegativeLag;
 
-    if (maxNegCorrelation > maxCorrelation * 1.5f) {
-        qDebug() << "  Warning: Using negative lag (unusual configuration)";
+    if (maxNegCorrelation > maxPosCorrelation) {
+        // Negative lag wins - WebSDR is ahead of Radio
         finalCorrelation = maxNegCorrelation;
-        finalLag = bestNegLag;
+        finalLagMagnitude = bestNegLag;
+        isNegativeLag = true;
+        qDebug() << "  Selected: NEGATIVE lag (WebSDR ahead, reduce delay)";
+    } else {
+        // Positive lag wins - WebSDR is behind Radio
+        finalCorrelation = maxPosCorrelation;
+        finalLagMagnitude = bestPosLag;
+        isNegativeLag = false;
+        qDebug() << "  Selected: POSITIVE lag (WebSDR behind, add delay)";
     }
 
     // ========== IMPROVED CONFIDENCE ESTIMATION ==========
     // Use peak-to-second-peak ratio instead of just peak-to-average
-    float secondPeak = findSecondPeak(combinedGcc, finalLag, minDelaySamples, maxDelaySamples);
+    // For second peak search, use the index where we found the best peak
+    int peakIndex = isNegativeLag ? (m_fftSize - finalLagMagnitude) : finalLagMagnitude;
+    float secondPeak = findSecondPeak(combinedGcc, peakIndex, minDelaySamples, maxDelaySamples);
 
     // Peak-to-second-peak ratio (better confidence metric)
     float peakToSecondRatio = (secondPeak > 1e-10f) ? (finalCorrelation / secondPeak) : 10.0f;
 
-    // Also compute peak-to-average for backup
+    // Also compute peak-to-average for backup (search both positive and negative regions)
     float sumCorr = 0.0f;
     int countCorr = 0;
     for (int i = minDelaySamples; i < maxDelaySamples && i < m_fftSize / 2; i++) {
         sumCorr += std::abs(combinedGcc[i].real());
         countCorr++;
+        // Also include negative lag region
+        int negIdx = m_fftSize - i;
+        if (negIdx >= 0 && negIdx < m_fftSize) {
+            sumCorr += std::abs(combinedGcc[negIdx].real());
+            countCorr++;
+        }
     }
     float avgCorr = (countCorr > 0) ? (sumCorr / countCorr) : 1e-10f;
     float peakToAvgRatio = (avgCorr > 1e-10f) ? (finalCorrelation / avgCorr) : 0.0f;
@@ -502,8 +593,13 @@ void AudioSync::analyzeWithRobustGccPhat()
     float conf2 = std::min(1.0f, std::max(0.0f, (peakToAvgRatio - 1.0f) / 9.0f));
     float confidence = std::min(conf1, conf2);
 
-    // Convert lag to milliseconds
-    float delayMs = static_cast<float>(finalLag) * 1000.0f / SAMPLE_RATE;
+    // Convert lag to SIGNED milliseconds
+    // Positive = WebSDR behind Radio (add delay to Radio channel)
+    // Negative = WebSDR ahead of Radio (reduce delay / add delay to WebSDR channel)
+    float delayMs = static_cast<float>(finalLagMagnitude) * 1000.0f / SAMPLE_RATE;
+    if (isNegativeLag) {
+        delayMs = -delayMs;  // Negative delay means WebSDR is ahead
+    }
 
     {
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -515,7 +611,8 @@ void AudioSync::analyzeWithRobustGccPhat()
     m_resultReady.store(true);
 
     qDebug() << "=== ROBUST GCC-PHAT COMPLETE ===";
-    qDebug() << "  Delay:" << delayMs << "ms (" << finalLag << " samples)";
+    qDebug() << "  Delay:" << delayMs << "ms (" << (isNegativeLag ? "-" : "+") << finalLagMagnitude << " samples)";
+    qDebug() << "  Direction:" << (isNegativeLag ? "WebSDR AHEAD (reduce delay)" : "WebSDR BEHIND (add delay)");
     qDebug() << "  Peak correlation:" << finalCorrelation;
     qDebug() << "  Second peak:" << secondPeak;
     qDebug() << "  Peak-to-second ratio:" << peakToSecondRatio;

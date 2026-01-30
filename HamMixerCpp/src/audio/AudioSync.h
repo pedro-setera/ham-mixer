@@ -24,7 +24,7 @@
 class AudioSync {
 public:
     static constexpr int SAMPLE_RATE = 48000;
-    static constexpr float CAPTURE_SECONDS = 2.0f;  // 2 second capture window for correlation
+    static constexpr float CAPTURE_SECONDS = 2.5f;  // 2.5 second capture window for better averaging
     static constexpr int MAX_DELAY_MS = 2000;       // Max search window (matches delay slider)
     static constexpr float MIN_CONFIDENCE = 0.05f;  // Minimum correlation for success
 
@@ -42,13 +42,14 @@ public:
     static constexpr int NUM_BANDS = 4;
 
     // Voice Activity Detection: minimum RMS threshold for "active" frame
-    static constexpr float VAD_THRESHOLD = 0.01f;
+    // Lower threshold (0.005) accepts quieter frames for weak signal detection
+    static constexpr float VAD_THRESHOLD = 0.005f;
 
     // VAD frame size in samples (20ms frames)
     static constexpr int VAD_FRAME_SIZE = SAMPLE_RATE / 50;
 
     struct SyncResult {
-        float delayMs = 0.0f;
+        float delayMs = 0.0f;       // Signed: positive = WebSDR behind (add delay), negative = WebSDR ahead (reduce delay)
         float confidence = 0.0f;
         bool success = false;
     };
@@ -144,6 +145,10 @@ private:
     // Find second-highest peak for confidence estimation
     float findSecondPeak(const std::vector<std::complex<float>>& gcc,
                          int bestLag, int minLag, int maxLag);
+
+    // Envelope extraction using Hilbert transform
+    // More robust to phase distortions from QSB/fading
+    void extractEnvelope(std::vector<float>& signal);
 };
 
 #endif // AUDIOSYNC_H

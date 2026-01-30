@@ -619,15 +619,30 @@ void MainWindow::checkSyncResult()
         AudioSync::SyncResult result = mixer->getSyncResult();
 
         if (result.success) {
-            // Apply the detected delay
+            // Apply the detected delay (can be positive or negative)
             int delayMs = static_cast<int>(result.delayMs);
-            m_delaySlider->setValue(delayMs);
 
-            QMessageBox::information(this, "Auto-Sync Complete",
-                QString("Detected delay: %1 ms\nConfidence: %2%\n\n"
-                        "The delay has been applied automatically.")
-                    .arg(delayMs)
-                    .arg(static_cast<int>(result.confidence * 100)));
+            if (delayMs >= 0) {
+                // Normal case: WebSDR is behind Radio, add delay to Radio channel
+                m_delaySlider->setValue(delayMs);
+
+                QMessageBox::information(this, "Auto-Sync Complete",
+                    QString("Detected delay: %1 ms\nConfidence: %2%\n\n"
+                            "The delay has been applied automatically.")
+                        .arg(delayMs)
+                        .arg(static_cast<int>(result.confidence * 100)));
+            } else {
+                // Unusual case: WebSDR is ahead of Radio
+                // We can only delay Radio, not advance it, so set to 0
+                m_delaySlider->setValue(0);
+
+                QMessageBox::information(this, "Auto-Sync Complete",
+                    QString("Detected offset: %1 ms (WebSDR ahead)\nConfidence: %2%\n\n"
+                            "The WebSDR signal arrives before the Radio signal.\n"
+                            "Delay has been set to 0 ms (minimum possible).")
+                        .arg(delayMs)
+                        .arg(static_cast<int>(result.confidence * 100)));
+            }
         } else {
             QMessageBox::warning(this, "Auto-Sync Failed",
                 QString("Could not detect reliable sync.\n"
