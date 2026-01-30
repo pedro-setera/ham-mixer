@@ -233,7 +233,7 @@ void SMeter::drawTitle(QPainter& painter)
 
 void SMeter::drawReadouts(QPainter& painter)
 {
-    QFont readoutFont("Consolas", 9, QFont::Bold);
+    QFont readoutFont("Consolas", 10, QFont::Bold);
     painter.setFont(readoutFont);
 
     QFontMetrics fm(readoutFont);
