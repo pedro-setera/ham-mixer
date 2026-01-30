@@ -293,6 +293,9 @@ void MainWindow::setupUI()
 
     mainLayout->addWidget(m_browserGroup);
 
+    // Add stretch at the end to prevent other widgets from expanding when browser is hidden
+    mainLayout->addStretch();
+
     // Create WebSDR manager with the browser container for embedded mode
     m_webSdrManager = new WebSdrManager(browserContainer, this);
 
