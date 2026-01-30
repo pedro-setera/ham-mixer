@@ -31,6 +31,7 @@ public:
         int pan = 0;          // -100 to +100
         int delayMs = 300;    // 0-600 (channel 1 only)
         bool muted = false;
+        bool autoSyncEnabled = false;  // Auto-sync toggle (channel 1 only)
     };
 
     // Master settings

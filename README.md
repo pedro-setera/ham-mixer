@@ -58,7 +58,10 @@ Whether you're chasing DX, monitoring propagation, or comparing reception betwee
   - **Multiband Analysis** - Divides spectrum into 4 bands, weights by SNR
   - **GCC-PHAT-beta** - Adjustable whitening (beta=0.7) reduces noise amplification
   - **Symmetric Lag Detection** - Equal sensitivity for positive/negative delays
-- **Auto-sync button** - Automatically align audio streams (works for both voice and CW)
+- **Auto/Manual sync modes**:
+  - **Manual mode** - Click "Sync" button to align audio streams once
+  - **Auto mode** - Enable "Auto" checkbox for continuous periodic sync every 15 seconds
+  - **Safety threshold** - Auto corrections only applied if within 200ms of current delay (prevents large jumps)
 - **CW pitch-independent** - Works with any CW sidetone pitch from 400 Hz to 1000 Hz
 - **Manual delay control** - 0-2000ms adjustable delay for distant SDR sites
 - **Handles challenging conditions** - QSB (fading), QRM (interference), weak signals, volume differences
@@ -241,7 +244,8 @@ build.bat
 - Use **MUTE buttons** on each channel for quick switching
 
 ### 6. Synchronize Audio
-- Click **Auto-Sync** to automatically detect and compensate for delay
+- Click **Sync** to automatically detect and compensate for delay
+- Enable **Auto** checkbox for continuous sync every 15 seconds
 - Or manually adjust the delay slider until audio aligns
 - Range: 0-2000ms (supports distant KiwiSDR sites like Australia/New Zealand)
 
@@ -283,7 +287,8 @@ build.bat
 - Kenwood/Elecraft/Yaesu: 38400, 9600, or 4800 baud
 
 ### Audio out of sync
-- Click **Auto-Sync** button during transmission (works for both voice and CW)
+- Click **Sync** button during transmission (works for both voice and CW)
+- Enable **Auto** checkbox for continuous automatic sync every 15 seconds
 - For CW: any sidetone pitch from 400-1000 Hz is supported automatically
 - Manually adjust delay slider if auto-sync fails
 - Typical internet delay: 200-500ms for WebSDR, 1000-1500ms for distant KiwiSDR

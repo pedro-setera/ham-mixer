@@ -7,6 +7,7 @@
 #include "serial/CIVProtocol.h"
 #include "HamMixer/Version.h"
 #include <algorithm>
+#include <cmath>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGroupBox>
@@ -57,6 +58,10 @@ MainWindow::MainWindow(QWidget* parent)
     m_syncTimer = new QTimer(this);
     connect(m_syncTimer, &QTimer::timeout, this, &MainWindow::checkSyncResult);
 
+    // Auto-sync periodic timer (starts when toggle is enabled)
+    m_autoSyncTimer = new QTimer(this);
+    connect(m_autoSyncTimer, &QTimer::timeout, this, &MainWindow::onAutoSyncTimerTick);
+
     qDebug() << "MainWindow created";
 }
 
@@ -64,6 +69,7 @@ MainWindow::~MainWindow()
 {
     m_meterTimer->stop();
     m_syncTimer->stop();
+    m_autoSyncTimer->stop();
 
     // Disconnect radio if connected
     if (m_radioController && m_radioController->isConnected()) {
@@ -126,18 +132,24 @@ void MainWindow::setupUI()
     controlsLayout->setContentsMargins(0, 0, 0, 0);
     controlsLayout->setSpacing(10);
 
-    // Delay controls - two rows: top row has button and label, bottom row has slider
+    // Delay controls - two rows: top row has button, toggle, and label, bottom row has slider
     QGroupBox* delayGroup = new QGroupBox("Delay (Radio)", this);
     delayGroup->setFixedHeight(145);  // +10px for taller row
     QVBoxLayout* delayMainLayout = new QVBoxLayout(delayGroup);
     delayMainLayout->setSpacing(10);
 
-    // Top row: Auto-Sync button (left), stretch, delay value (right)
+    // Top row: Sync button (left), Auto toggle (center), delay value (right)
     QHBoxLayout* delayTopRow = new QHBoxLayout();
-    m_autoSyncButton = new QPushButton("Auto-Sync", this);
-    m_autoSyncButton->setToolTip("Automatically detect optimal delay");
-    m_autoSyncButton->setFixedWidth(120);
+    m_autoSyncButton = new QPushButton("Sync", this);
+    m_autoSyncButton->setToolTip("Detect optimal delay once");
+    m_autoSyncButton->setFixedWidth(60);
     delayTopRow->addWidget(m_autoSyncButton);
+
+    delayTopRow->addStretch();
+
+    m_autoSyncToggle = new QCheckBox("Auto", this);
+    m_autoSyncToggle->setToolTip("Enable continuous automatic sync every 15 seconds");
+    delayTopRow->addWidget(m_autoSyncToggle);
 
     delayTopRow->addStretch();
 
@@ -290,6 +302,7 @@ void MainWindow::connectSignals()
     // Delay
     connect(m_delaySlider, &QSlider::valueChanged, this, &MainWindow::onDelayChanged);
     connect(m_autoSyncButton, &QPushButton::clicked, this, &MainWindow::onAutoSyncClicked);
+    connect(m_autoSyncToggle, &QCheckBox::toggled, this, &MainWindow::onAutoSyncToggled);
 
     // Crossfader
     connect(m_crossfader, &Crossfader::crossfaderChanged, this, &MainWindow::onCrossfaderChanged);
@@ -371,6 +384,7 @@ void MainWindow::applySettingsToUI()
 {
     // Apply current m_settings to UI widgets (without reloading from file)
     m_delaySlider->setValue(m_settings.channel1().delayMs);
+    m_autoSyncToggle->setChecked(m_settings.channel1().autoSyncEnabled);
     m_masterStrip->setVolume(m_settings.master().volume);
     m_masterStrip->setMuted(m_settings.master().muted);
     m_radioStrip->setMuted(m_settings.channel1().muted);
@@ -418,6 +432,7 @@ void MainWindow::saveSettings()
     m_settings.channel1().delayMs = m_delaySlider->value();
     m_settings.channel1().muted = m_radioStrip->isMuted();
     m_settings.channel1().volume = m_radioStrip->getVolume();
+    m_settings.channel1().autoSyncEnabled = m_autoSyncToggle->isChecked();
     m_settings.channel2().muted = m_websdrStrip->isMuted();
     m_settings.channel2().volume = m_websdrStrip->getVolume();
     m_settings.master().volume = m_masterStrip->getVolume();
@@ -523,6 +538,59 @@ void MainWindow::onAutoSyncClicked()
 
     // Start timer to monitor progress
     m_syncTimer->start(100);  // Check every 100ms
+}
+
+void MainWindow::onAutoSyncToggled(bool enabled)
+{
+    if (enabled) {
+        // Start periodic auto-sync timer
+        m_autoSyncTimer->start(AUTO_SYNC_INTERVAL_MS);
+        qDebug() << "Auto-Sync: Enabled, interval =" << AUTO_SYNC_INTERVAL_MS << "ms";
+    } else {
+        // Stop periodic auto-sync
+        m_autoSyncTimer->stop();
+        qDebug() << "Auto-Sync: Disabled";
+    }
+    m_settings.markDirty();
+}
+
+void MainWindow::onAutoSyncTimerTick()
+{
+    // Skip if not connected or already syncing
+    if (!m_audioManager->isRunning()) {
+        return;
+    }
+
+    MixerCore* mixer = m_audioManager->mixer();
+    if (!mixer || mixer->isSyncCapturing()) {
+        return;  // Skip if already syncing
+    }
+
+    // Mark this as an auto-triggered sync (for threshold checking)
+    m_isAutoTriggeredSync = true;
+
+    // Determine sync mode based on radio's current operating mode (same as manual sync)
+    AudioSync::SignalMode syncMode = AudioSync::VOICE;
+
+    if (m_radioController) {
+        uint8_t radioMode = m_radioController->currentMode();
+
+        if (radioMode == CIVProtocol::MODE_CW ||
+            radioMode == CIVProtocol::MODE_CW_R ||
+            radioMode == CIVProtocol::MODE_RTTY ||
+            radioMode == CIVProtocol::MODE_RTTY_R) {
+            syncMode = AudioSync::CW;
+        }
+    }
+
+    // Start sync capture
+    mixer->startSyncCapture(syncMode);
+    m_autoSyncButton->setText("Syncing...");
+
+    // Start timer to monitor progress
+    m_syncTimer->start(100);
+
+    qDebug() << "Auto-Sync: Timer triggered sync";
 }
 
 void MainWindow::onCrossfaderChanged(float radioVol, float radioPan, float websdrVol, float websdrPan)
@@ -632,6 +700,7 @@ void MainWindow::checkSyncResult()
     MixerCore* mixer = m_audioManager->mixer();
     if (!mixer) {
         m_syncTimer->stop();
+        m_isAutoTriggeredSync = false;
         return;
     }
 
@@ -645,37 +714,73 @@ void MainWindow::checkSyncResult()
     // Check if result is ready
     if (mixer->hasSyncResult()) {
         m_syncTimer->stop();
-        m_autoSyncButton->setText("Auto-Sync");
+        m_autoSyncButton->setText("Sync");
 
         AudioSync::SyncResult result = mixer->getSyncResult();
+        bool wasAutoTriggered = m_isAutoTriggeredSync;
+        m_isAutoTriggeredSync = false;
 
         if (result.success) {
             // Apply the detected delay (can be positive or negative)
-            int delayMs = static_cast<int>(result.delayMs);
+            int newDelayMs = static_cast<int>(result.delayMs);
+            int currentDelayMs = m_delaySlider->value();
 
-            if (delayMs >= 0) {
+            // For auto-triggered syncs, check if delta is within threshold
+            if (wasAutoTriggered) {
+                float delta = std::abs(static_cast<float>(newDelayMs - currentDelayMs));
+
+                if (delta > AUTO_SYNC_THRESHOLD_MS) {
+                    // Delta too large - skip this correction
+                    qDebug() << "Auto-Sync: Skipped, delta =" << delta
+                             << "ms exceeds threshold of" << AUTO_SYNC_THRESHOLD_MS << "ms"
+                             << "(current:" << currentDelayMs << ", detected:" << newDelayMs << ")";
+                    return;
+                }
+
+                // Apply silently (no message box for auto sync)
+                if (newDelayMs >= 0) {
+                    m_delaySlider->setValue(newDelayMs);
+                    qDebug() << "Auto-Sync: Applied delay =" << newDelayMs
+                             << "ms (delta:" << delta << "ms, confidence:" << result.confidence * 100 << "%)";
+                } else {
+                    m_delaySlider->setValue(0);
+                    qDebug() << "Auto-Sync: WebSDR ahead, set delay to 0";
+                }
+                return;
+            }
+
+            // Manual sync - show message boxes
+            if (newDelayMs >= 0) {
                 // Normal case: WebSDR is behind Radio, add delay to Radio channel
-                m_delaySlider->setValue(delayMs);
+                m_delaySlider->setValue(newDelayMs);
 
-                QMessageBox::information(this, "Auto-Sync Complete",
+                QMessageBox::information(this, "Sync Complete",
                     QString("Detected delay: %1 ms\nConfidence: %2%\n\n"
                             "The delay has been applied automatically.")
-                        .arg(delayMs)
+                        .arg(newDelayMs)
                         .arg(static_cast<int>(result.confidence * 100)));
             } else {
                 // Unusual case: WebSDR is ahead of Radio
                 // We can only delay Radio, not advance it, so set to 0
                 m_delaySlider->setValue(0);
 
-                QMessageBox::information(this, "Auto-Sync Complete",
+                QMessageBox::information(this, "Sync Complete",
                     QString("Detected offset: %1 ms (WebSDR ahead)\nConfidence: %2%\n\n"
                             "The WebSDR signal arrives before the Radio signal.\n"
                             "Delay has been set to 0 ms (minimum possible).")
-                        .arg(delayMs)
+                        .arg(newDelayMs)
                         .arg(static_cast<int>(result.confidence * 100)));
             }
         } else {
-            QMessageBox::warning(this, "Auto-Sync Failed",
+            // Sync failed
+            if (wasAutoTriggered) {
+                // Silent failure for auto sync
+                qDebug() << "Auto-Sync: Failed, confidence =" << result.confidence * 100 << "%";
+                return;
+            }
+
+            // Manual sync - show warning
+            QMessageBox::warning(this, "Sync Failed",
                 QString("Could not detect reliable sync.\n"
                         "Confidence: %1%\n\n"
                         "Tips:\n"

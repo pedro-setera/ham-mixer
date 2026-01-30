@@ -251,6 +251,7 @@ QJsonObject Settings::toJson() const
     ch1["pan"] = m_channel1.pan;
     ch1["delay_ms"] = m_channel1.delayMs;
     ch1["muted"] = m_channel1.muted;
+    ch1["auto_sync_enabled"] = m_channel1.autoSyncEnabled;
     root["channel1"] = ch1;
 
     // Channel 2
@@ -324,6 +325,7 @@ void Settings::fromJson(const QJsonObject& json)
     m_channel1.pan = ch1["pan"].toInt(-100);
     m_channel1.delayMs = ch1["delay_ms"].toInt(300);
     m_channel1.muted = ch1["muted"].toBool(false);
+    m_channel1.autoSyncEnabled = ch1["auto_sync_enabled"].toBool(false);
 
     // Channel 2
     QJsonObject ch2 = json["channel2"].toObject();
