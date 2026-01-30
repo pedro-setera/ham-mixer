@@ -250,7 +250,7 @@ void MainWindow::setupMenuBar()
     QMenu* fileMenu = menuBar()->addMenu("&File");
 
     fileMenu->addAction("&Open Config...", this, &MainWindow::onOpenConfig, QKeySequence::Open);
-    fileMenu->addAction("&Save Config...", this, &MainWindow::onSaveConfig, QKeySequence::Save);
+    fileMenu->addAction("&Save Config", this, &MainWindow::onSaveConfig, QKeySequence::Save);
 
     m_recentConfigsMenu = fileMenu->addMenu("Open &Recent");
     updateRecentConfigsMenu();
@@ -358,10 +358,17 @@ void MainWindow::connectSignals()
 
 void MainWindow::loadSettings()
 {
+    // Load from default AppData config (only called at startup)
     m_settings.load();
     m_settings.loadRecentConfigs();
 
-    // Apply settings
+    // Apply to UI
+    applySettingsToUI();
+}
+
+void MainWindow::applySettingsToUI()
+{
+    // Apply current m_settings to UI widgets (without reloading from file)
     m_delaySlider->setValue(m_settings.channel1().delayMs);
     m_masterStrip->setVolume(m_settings.master().volume);
     m_masterStrip->setMuted(m_settings.master().muted);
@@ -387,6 +394,9 @@ void MainWindow::loadSettings()
     m_webSdrManager->setSiteList(m_settings.webSdrSites());
     m_radioControlPanel->setSiteList(m_settings.webSdrSites());
     m_radioControlPanel->setSelectedSite(m_settings.webSdr().selectedSiteId);
+
+    // Clear dirty flag since we just loaded/applied settings
+    m_settings.clearDirty();
 
     // NOTE: WebSDR sites are NOT preloaded at startup anymore
     // They will be loaded when CONNECT is clicked
@@ -658,11 +668,28 @@ void MainWindow::checkSyncResult()
 
 void MainWindow::onSaveConfig()
 {
-    // Ensure configurations directory exists
+    QString fileName = m_settings.currentConfigPath();
+
+    // If we have a current config file, save directly to it (no file picker)
+    if (!fileName.isEmpty() && QFile::exists(fileName)) {
+        // Update current settings before saving
+        saveSettings();
+
+        if (m_settings.saveToFile(fileName)) {
+            // Saved silently to current file
+            qDebug() << "Config saved to:" << fileName;
+        } else {
+            QMessageBox::warning(this, "Save Failed",
+                QString("Failed to save configuration to:\n%1").arg(fileName));
+        }
+        return;
+    }
+
+    // No current config file - show file picker for "Save As" behavior
     QString configDir = Settings::getConfigurationsDir();
     QDir().mkpath(configDir);
 
-    QString fileName = QFileDialog::getSaveFileName(
+    fileName = QFileDialog::getSaveFileName(
         this,
         "Save Configuration",
         configDir,
@@ -708,8 +735,8 @@ void MainWindow::onOpenConfig()
     }
 
     if (m_settings.loadFromFile(fileName)) {
-        // Apply loaded settings to UI
-        loadSettings();
+        // Apply loaded settings to UI (don't reload from default config!)
+        applySettingsToUI();
         updateRecentConfigsMenu();
         // No popup - just load silently
     } else {
@@ -728,8 +755,8 @@ void MainWindow::onOpenRecentConfig()
 
     // Open directly without confirmation - user knows what they want
     if (m_settings.loadFromFile(filePath)) {
-        // Apply loaded settings to UI
-        loadSettings();
+        // Apply loaded settings to UI (don't reload from default config!)
+        applySettingsToUI();
         updateRecentConfigsMenu();
     } else {
         QMessageBox::warning(this, "Load Failed",

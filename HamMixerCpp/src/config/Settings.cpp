@@ -235,6 +235,9 @@ QJsonObject Settings::toJson() const
     QJsonObject root;
     root["version"] = m_version;
 
+    // Save current config path so we remember it after restart
+    root["current_config_path"] = m_currentConfigPath;
+
     // Devices
     QJsonObject devices;
     devices["radio_input"] = m_devices.radioInput;
@@ -305,6 +308,9 @@ QJsonObject Settings::toJson() const
 void Settings::fromJson(const QJsonObject& json)
 {
     m_version = json["version"].toString("1.0");
+
+    // Load current config path (persisted from last session)
+    m_currentConfigPath = json["current_config_path"].toString();
 
     // Devices
     QJsonObject devices = json["devices"].toObject();

@@ -131,6 +131,7 @@ private:
     void setupMenuBar();
     void connectSignals();
     void loadSettings();
+    void applySettingsToUI();  // Apply current m_settings to UI without reloading from file
     void saveSettings();
     void refreshDevices();
     void applyPanningWithMuteOverride();
