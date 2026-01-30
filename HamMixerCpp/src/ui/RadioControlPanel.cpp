@@ -34,7 +34,7 @@ RadioControlPanel::RadioControlPanel(QWidget* parent)
 void RadioControlPanel::setupUI()
 {
     // Main horizontal layout - single row with specific proportions
-    // CI-V 30%, WebSDR 32%, Radio Info 25%, Tools 13%
+    // CI-V 30%, WebSDR 28%, Radio Info 25%, Tools 17%
     QHBoxLayout* mainLayout = new QHBoxLayout(this);
     mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(10);
@@ -97,7 +97,7 @@ void RadioControlPanel::setupUI()
     webSdrLayout->addWidget(m_siteCombo, 1);
     webSdrLayout->addWidget(m_manageButton);
 
-    mainLayout->addWidget(webSdrGroup, 32);
+    mainLayout->addWidget(webSdrGroup, 28);
 
     // ===== Radio Info Section (25%) =====
     m_radioInfoGroup = new QGroupBox("Radio Info", this);
@@ -125,7 +125,7 @@ void RadioControlPanel::setupUI()
 
     mainLayout->addWidget(m_radioInfoGroup, 25);
 
-    // ===== Tools Section (13%) =====
+    // ===== Tools Section (17%) =====
     QGroupBox* toolsGroup = new QGroupBox("Tools", this);
     QHBoxLayout* toolsLayout = new QHBoxLayout(toolsGroup);
     toolsLayout->setContentsMargins(10, 5, 10, 5);
@@ -164,7 +164,7 @@ void RadioControlPanel::setupUI()
     toolsLayout->addWidget(m_recordIndicator);
     toolsLayout->addStretch();
 
-    mainLayout->addWidget(toolsGroup, 13);
+    mainLayout->addWidget(toolsGroup, 17);
 
     // Blink timer for recording indicator
     m_blinkTimer = new QTimer(this);

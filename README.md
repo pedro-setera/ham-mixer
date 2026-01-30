@@ -135,9 +135,9 @@ You can add custom SDR sites through **File > Manage WebSDR...** menu.
 
 ### Top Row Sections (Left to Right)
 - **Radio Connection (30%)**: COM port selection and Connect/Disconnect button (auto-detects protocol)
-- **WebSDR (32%)**: Site selector dropdown with cogwheel button for quick access to site manager
+- **WebSDR (28%)**: Site selector dropdown with cogwheel button for quick access to site manager
 - **Radio Info (25%)**: Current frequency and mode display; shows detected Icom model (e.g., "Radio Info - IC-7300")
-- **Tools (13%)**: TX indicator LED (red when transmitting), REC button with recording indicator
+- **Tools (17%)**: TX indicator LED (red when transmitting), REC button with recording indicator
 
 ### Controls Row
 - **Delay/Crossfader**: Time sync controls (0-2000ms) and audio balance
