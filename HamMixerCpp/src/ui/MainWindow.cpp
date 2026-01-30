@@ -683,8 +683,7 @@ void MainWindow::onSaveConfig()
 
     if (m_settings.saveToFile(fileName)) {
         updateRecentConfigsMenu();
-        QMessageBox::information(this, "Configuration Saved",
-            QString("Configuration saved to:\n%1").arg(fileName));
+        // No popup - just save silently
     } else {
         QMessageBox::warning(this, "Save Failed",
             QString("Failed to save configuration to:\n%1").arg(fileName));
@@ -693,24 +692,7 @@ void MainWindow::onSaveConfig()
 
 void MainWindow::onOpenConfig()
 {
-    // Check for unsaved changes
-    if (m_settings.isDirty()) {
-        QMessageBox::StandardButton reply = QMessageBox::question(
-            this,
-            "Unsaved Changes",
-            "You have unsaved changes. Do you want to save before opening a new configuration?",
-            QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
-            QMessageBox::Save
-        );
-
-        if (reply == QMessageBox::Cancel) {
-            return;
-        }
-        if (reply == QMessageBox::Save) {
-            onSaveConfig();
-        }
-    }
-
+    // Open directly without confirmation - user knows what they want
     QString configDir = Settings::getConfigurationsDir();
     QDir().mkpath(configDir);
 
@@ -729,8 +711,7 @@ void MainWindow::onOpenConfig()
         // Apply loaded settings to UI
         loadSettings();
         updateRecentConfigsMenu();
-        QMessageBox::information(this, "Configuration Loaded",
-            QString("Configuration loaded from:\n%1").arg(fileName));
+        // No popup - just load silently
     } else {
         QMessageBox::warning(this, "Load Failed",
             QString("Failed to load configuration from:\n%1").arg(fileName));
@@ -745,24 +726,7 @@ void MainWindow::onOpenRecentConfig()
     QString filePath = action->data().toString();
     if (filePath.isEmpty()) return;
 
-    // Check for unsaved changes
-    if (m_settings.isDirty()) {
-        QMessageBox::StandardButton reply = QMessageBox::question(
-            this,
-            "Unsaved Changes",
-            "You have unsaved changes. Do you want to save before opening a new configuration?",
-            QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel,
-            QMessageBox::Save
-        );
-
-        if (reply == QMessageBox::Cancel) {
-            return;
-        }
-        if (reply == QMessageBox::Save) {
-            onSaveConfig();
-        }
-    }
-
+    // Open directly without confirmation - user knows what they want
     if (m_settings.loadFromFile(filePath)) {
         // Apply loaded settings to UI
         loadSettings();

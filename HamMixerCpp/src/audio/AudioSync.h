@@ -24,7 +24,7 @@
 class AudioSync {
 public:
     static constexpr int SAMPLE_RATE = 48000;
-    static constexpr float CAPTURE_SECONDS = 2.5f;  // 2.5 second capture window for better averaging
+    static constexpr float CAPTURE_SECONDS = 1.5f;  // 1.5 second capture - sweet spot for short CQ calls
     static constexpr int MAX_DELAY_MS = 2000;       // Max search window (matches delay slider)
     static constexpr float MIN_CONFIDENCE = 0.05f;  // Minimum correlation for success
 

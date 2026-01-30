@@ -55,7 +55,7 @@ Whether you're chasing DX, monitoring propagation, or comparing reception betwee
   - **Multiband Analysis** - Divides spectrum into 4 bands, weights by SNR
   - **GCC-PHAT-beta** - Adjustable whitening (beta=0.7) reduces noise amplification
   - **Symmetric Lag Detection** - Equal sensitivity for positive/negative delays
-- **Auto-sync button** - Automatically align audio streams (2.5-second capture window)
+- **Auto-sync button** - Automatically align audio streams (1.5-second capture window)
 - **Manual delay control** - 0-2000ms adjustable delay for distant SDR sites
 - **Handles challenging conditions** - QSB (fading), QRM (interference), weak signals, volume differences
 - **Bidirectional detection** - Works when WebSDR is ahead or behind the radio signal
