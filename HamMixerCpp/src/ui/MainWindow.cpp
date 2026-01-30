@@ -482,9 +482,11 @@ void MainWindow::applySettingsToUI()
         m_showWebSdrViewAction->blockSignals(false);
 
         if (!showBrowser) {
-            // Start in compact mode
+            // Start in compact mode - same height as toggle function
+            static constexpr int COMPACT_HEIGHT = 390;
             m_browserGroup->hide();
-            setMinimumSize(1200, 420);
+            setMinimumSize(1200, COMPACT_HEIGHT);
+            resize(width(), COMPACT_HEIGHT);
         }
     }
 
@@ -1566,10 +1568,14 @@ void MainWindow::onToggleWebSdrView(bool checked)
     // Update setting
     m_settings.webSdr().showBrowser = checked;
 
+    // Compact mode height: RadioControlPanel (~60) + Content (~290) + margins (~30) = ~380
+    static constexpr int COMPACT_HEIGHT = 390;
+
     if (checked) {
         // Show WebSDR browser view (full mode)
         m_browserGroup->show();
         setMinimumSize(1200, 876);
+        setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);  // Remove max constraint
 
         // Restore window size if it was shrunk
         QSize currentSize = size();
@@ -1579,10 +1585,14 @@ void MainWindow::onToggleWebSdrView(bool checked)
     } else {
         // Hide WebSDR browser view (compact mode)
         m_browserGroup->hide();
-        setMinimumSize(1200, 420);
+        setMinimumSize(1200, COMPACT_HEIGHT);
+        setMaximumSize(QWIDGETSIZE_MAX, COMPACT_HEIGHT);  // Temporarily constrain max height
 
-        // Shrink window to fit compact layout
-        adjustSize();
+        // Force resize to compact height
+        resize(width(), COMPACT_HEIGHT);
+
+        // Remove max height constraint after resize (allow some flexibility)
+        setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
     }
 
     // Mark settings as dirty so the view preference is saved
