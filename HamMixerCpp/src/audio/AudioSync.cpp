@@ -374,7 +374,7 @@ void AudioSync::analyzeWithRobustGccPhat()
     qDebug() << "Starting ROBUST GCC-PHAT analysis...";
     qDebug() << "  Mode:" << modeStr << ", Capture:" << captureSeconds << "s";
     if (m_signalMode == CW) {
-        qDebug() << "  CW mode: Bandpass" << CW_BANDPASS_LOW_HZ << "-" << CW_BANDPASS_HIGH_HZ << "Hz, VAD DISABLED";
+        qDebug() << "  CW mode: Envelope bandpass" << CW_ENVELOPE_LOW_HZ << "-" << CW_ENVELOPE_HIGH_HZ << "Hz, VAD DISABLED";
         qDebug() << "  Improvements: Normalization, Envelope (Hilbert), Multiband, PHAT-beta=" << PHAT_BETA;
     } else {
         qDebug() << "  Voice mode: Bandpass" << BANDPASS_LOW_HZ << "-" << BANDPASS_HIGH_HZ << "Hz, VAD threshold:" << VAD_THRESHOLD;
@@ -489,8 +489,10 @@ void AudioSync::analyzeWithRobustGccPhat()
     // ========== IMPROVEMENT 3 & 4: Multiband GCC-PHAT-beta ==========
     // Divide spectrum into bands, compute GCC for each, weight by SNR
     // Use mode-dependent bandpass frequencies
-    float bpLow = (m_signalMode == CW) ? CW_BANDPASS_LOW_HZ : BANDPASS_LOW_HZ;
-    float bpHigh = (m_signalMode == CW) ? CW_BANDPASS_HIGH_HZ : BANDPASS_HIGH_HZ;
+    // NOTE: For CW, after envelope extraction, we use LOW frequencies (keying pattern)
+    //       For Voice, we use speech frequencies (300-3000 Hz)
+    float bpLow = (m_signalMode == CW) ? CW_ENVELOPE_LOW_HZ : BANDPASS_LOW_HZ;
+    float bpHigh = (m_signalMode == CW) ? CW_ENVELOPE_HIGH_HZ : BANDPASS_HIGH_HZ;
 
     qDebug() << "Step 4: Multiband GCC-PHAT-beta analysis (" << NUM_BANDS << " bands)...";
     qDebug() << "  Bandpass:" << bpLow << "-" << bpHigh << "Hz";

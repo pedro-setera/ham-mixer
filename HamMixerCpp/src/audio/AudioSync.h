@@ -44,10 +44,12 @@ public:
     static constexpr float BANDPASS_LOW_HZ = 300.0f;
     static constexpr float BANDPASS_HIGH_HZ = 3000.0f;
 
-    // Bandpass filter for CW frequencies (400Hz - 1000Hz)
-    // Covers common CW pitch preferences from low (400 Hz) to high (1000 Hz)
-    static constexpr float CW_BANDPASS_LOW_HZ = 400.0f;
-    static constexpr float CW_BANDPASS_HIGH_HZ = 1000.0f;
+    // Bandpass filter for CW ENVELOPE frequencies (after Hilbert transform)
+    // The envelope of CW is a baseband signal with energy at the keying rate
+    // Typical CW speeds (15-25 WPM) produce keying patterns at 10-30 Hz
+    // Use low frequency range to capture the on/off keying pattern
+    static constexpr float CW_ENVELOPE_LOW_HZ = 1.0f;    // Near DC
+    static constexpr float CW_ENVELOPE_HIGH_HZ = 100.0f; // Captures keying harmonics
 
     // === ROBUSTNESS PARAMETERS ===
 
