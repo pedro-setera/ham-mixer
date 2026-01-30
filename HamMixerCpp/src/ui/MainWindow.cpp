@@ -26,6 +26,8 @@ MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
     , m_civSMeterDb(-80.0f)
     , m_civConnected(false)
+    , m_txMuteActive(false)
+    , m_masterMuteBeforeTx(false)
     , m_websdrSMeterDb(-80.0f)
     , m_websdrSmeterValid(false)
     , m_recentConfigsMenu(nullptr)
@@ -1151,6 +1153,8 @@ void MainWindow::onSerialConnectClicked()
             this, &MainWindow::onCIVError);
     connect(m_radioController, &RadioController::radioModelDetected,
             m_radioControlPanel, &RadioControlPanel::setRadioModel);
+    connect(m_radioController, &RadioController::txStatusChanged,
+            this, &MainWindow::onTxStatusChanged);
 
     // Update display with initial values from detection
     // (The signals were consumed by detection lambda, so we need to manually update)
@@ -1268,9 +1272,19 @@ void MainWindow::onSerialDisconnectClicked()
     m_civConnected = false;
     m_civSMeterDb = -80.0f;
 
+    // Reset TX mute state (in case we were transmitting when disconnected)
+    if (m_txMuteActive) {
+        m_txMuteActive = false;
+        // Restore master mute to what it was before TX
+        if (m_audioManager->mixer()) {
+            m_audioManager->mixer()->setMasterMute(m_masterMuteBeforeTx);
+        }
+    }
+
     // Step 6: Reset UI state
     m_radioControlPanel->setSerialConnectionState(RadioController::Disconnected);
     m_radioControlPanel->clearRadioInfo();
+    m_radioControlPanel->setTransmitting(false);
     m_radioStrip->resetMeter();
     m_websdrStrip->resetMeter();
     m_masterStrip->resetMeter();
@@ -1352,6 +1366,38 @@ void MainWindow::onCIVError(const QString& error)
     qWarning() << "CI-V Error:" << error;
     // Don't show message box for every error to avoid spam
     // UI status indicator will show error state
+}
+
+void MainWindow::onTxStatusChanged(bool transmitting)
+{
+    qDebug() << "TX status changed:" << (transmitting ? "TX" : "RX");
+
+    // Update TX indicator in UI
+    m_radioControlPanel->setTransmitting(transmitting);
+
+    // Mute/unmute master during TX to prevent hearing own voice from WebSDR
+    if (transmitting) {
+        // Save current master mute state before TX muting
+        if (!m_txMuteActive) {
+            m_masterMuteBeforeTx = m_masterStrip->isMuted();
+        }
+        m_txMuteActive = true;
+
+        // Force master mute during TX
+        if (m_audioManager->mixer()) {
+            m_audioManager->mixer()->setMasterMute(true);
+        }
+    } else {
+        // TX ended - restore previous master mute state
+        if (m_txMuteActive) {
+            m_txMuteActive = false;
+
+            // Restore master mute to what it was before TX
+            if (m_audioManager->mixer()) {
+                m_audioManager->mixer()->setMasterMute(m_masterMuteBeforeTx);
+            }
+        }
+    }
 }
 
 // ========== WebSDR Controller Slots ==========

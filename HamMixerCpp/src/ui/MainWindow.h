@@ -54,6 +54,7 @@ private slots:
     void onCIVModeChanged(uint8_t mode, const QString& modeName);
     void onCIVSMeterChanged(int value);
     void onCIVError(const QString& error);
+    void onTxStatusChanged(bool transmitting);
 
     // WebSDR slots
     void onWebSdrSiteChanged(const WebSdrSite& site);
@@ -94,6 +95,10 @@ private:
     // CI-V S-meter data with delay buffer for sync with audio
     float m_civSMeterDb;
     bool m_civConnected;
+
+    // TX mute state - mutes master during transmission to prevent hearing own voice
+    bool m_txMuteActive;        // true when master is muted due to TX
+    bool m_masterMuteBeforeTx;  // master mute state before TX started
 
     // WebSDR S-meter data (from page's smeter variable)
     float m_websdrSMeterDb;

@@ -18,6 +18,7 @@ RadioControlPanel::RadioControlPanel(QWidget* parent)
     , m_isConnected(false)
     , m_recording(false)
     , m_blinkState(false)
+    , m_transmitting(false)
     , m_radioInfoGroup(nullptr)
 {
     setupUI();
@@ -128,7 +129,23 @@ void RadioControlPanel::setupUI()
     QGroupBox* toolsGroup = new QGroupBox("Tools", this);
     QHBoxLayout* toolsLayout = new QHBoxLayout(toolsGroup);
     toolsLayout->setContentsMargins(10, 5, 10, 5);
-    toolsLayout->setSpacing(10);
+    toolsLayout->setSpacing(8);
+
+    // TX indicator (label + LED) - shows when radio is transmitting
+    m_txLabel = new QLabel("Tx", toolsGroup);
+    m_txLabel->setStyleSheet("QLabel { font-weight: bold; color: #808080; }");
+
+    m_txIndicator = new QLabel(toolsGroup);
+    m_txIndicator->setFixedSize(12, 12);
+    m_txIndicator->setStyleSheet(
+        "background-color: #404040; "
+        "border: 1px solid #606060; "
+        "border-radius: 6px;"
+    );
+
+    toolsLayout->addWidget(m_txLabel);
+    toolsLayout->addWidget(m_txIndicator);
+    toolsLayout->addSpacing(8);
 
     // Record button
     m_recordButton = new QPushButton("REC", toolsGroup);
@@ -220,6 +237,29 @@ void RadioControlPanel::setRecordingActive(bool recording)
 void RadioControlPanel::setRecordEnabled(bool enabled)
 {
     m_recordButton->setEnabled(enabled);
+}
+
+void RadioControlPanel::setTransmitting(bool transmitting)
+{
+    m_transmitting = transmitting;
+
+    if (transmitting) {
+        // TX active - bright red LED with glow effect
+        m_txLabel->setStyleSheet("QLabel { font-weight: bold; color: #FF5252; }");
+        m_txIndicator->setStyleSheet(
+            "background-color: #FF1744; "
+            "border: 1px solid #FF5252; "
+            "border-radius: 6px;"
+        );
+    } else {
+        // RX mode - dim gray LED
+        m_txLabel->setStyleSheet("QLabel { font-weight: bold; color: #808080; }");
+        m_txIndicator->setStyleSheet(
+            "background-color: #404040; "
+            "border: 1px solid #606060; "
+            "border-radius: 6px;"
+        );
+    }
 }
 
 QString RadioControlPanel::selectedPort() const

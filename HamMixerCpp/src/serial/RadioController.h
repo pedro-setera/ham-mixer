@@ -69,6 +69,7 @@ signals:
     void frequencyChanged(uint64_t frequencyHz);
     void modeChanged(uint8_t mode, const QString& modeName);
     void smeterChanged(int value);  // 0-255 scale
+    void txStatusChanged(bool transmitting);  // TX/RX state
     void errorOccurred(const QString& error);
     void radioModelDetected(const QString& modelName);
 };

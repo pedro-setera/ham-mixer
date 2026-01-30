@@ -36,6 +36,8 @@ Whether you're chasing DX, monitoring propagation, or comparing reception betwee
 - **Icom model detection** - Automatically detects and displays your Icom radio model (IC-7300, IC-705, IC-7610, etc.)
 - **Automatic frequency sync** - SDR follows your VFO in real-time
 - **Mode synchronization** - USB, LSB, CW, AM, FM modes automatically matched
+- **TX detection with auto-mute** - Master audio automatically mutes during transmission to prevent hearing your own delayed voice from WebSDR (Icom CI-V only)
+- **TX indicator LED** - Visual indicator in Tools section shows TX/RX state in real-time
 - **Dual S-Meter display** - Compare signal strength between local and remote
 - **Supported protocols**: Icom CI-V (binary) and Kenwood/Elecraft CAT (ASCII)
 
@@ -135,7 +137,7 @@ You can add custom SDR sites through **File > Manage WebSDR...** menu.
 - **Radio Connection (30%)**: COM port selection and Connect/Disconnect button (auto-detects protocol)
 - **WebSDR (32%)**: Site selector dropdown with cogwheel button for quick access to site manager
 - **Radio Info (25%)**: Current frequency and mode display; shows detected Icom model (e.g., "Radio Info - IC-7300")
-- **Tools (13%)**: REC button with recording indicator
+- **Tools (13%)**: TX indicator LED (red when transmitting), REC button with recording indicator
 
 ### Controls Row
 - **Delay/Crossfader**: Time sync controls (0-2000ms) and audio balance

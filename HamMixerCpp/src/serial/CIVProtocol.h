@@ -37,8 +37,12 @@ constexpr uint8_t CMD_READ_MODE = 0x04;        // Read operating mode
 constexpr uint8_t CMD_WRITE_FREQ = 0x05;       // Set operating frequency
 constexpr uint8_t CMD_WRITE_MODE = 0x06;       // Set operating mode
 constexpr uint8_t CMD_READ_METER = 0x15;       // Read meter levels
+constexpr uint8_t CMD_TX_STATUS = 0x1C;        // Read/set transmit status
 constexpr uint8_t CMD_OK = 0xFB;               // OK response
 constexpr uint8_t CMD_NG = 0xFA;               // NG (error) response
+
+// Sub-commands for CMD_TX_STATUS (0x1C)
+constexpr uint8_t SUBCMD_TX_STATE = 0x00;      // TX/RX state (0=RX, 1=TX)
 
 // Sub-commands for CMD_READ_METER (0x15)
 constexpr uint8_t SUBCMD_SMETER = 0x02;        // S-meter level

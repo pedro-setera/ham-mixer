@@ -59,6 +59,7 @@ public:
     // Tools section
     void setRecordingActive(bool recording);
     void setRecordEnabled(bool enabled);
+    void setTransmitting(bool transmitting);
 
 signals:
     void serialConnectClicked();
@@ -96,9 +97,12 @@ private:
     // Tools controls
     QPushButton* m_recordButton;
     QLabel* m_recordIndicator;
+    QLabel* m_txLabel;
+    QLabel* m_txIndicator;
     QTimer* m_blinkTimer;
     bool m_recording;
     bool m_blinkState;
+    bool m_transmitting;
 
     // State
     bool m_isConnected;

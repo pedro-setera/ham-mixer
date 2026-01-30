@@ -18,6 +18,7 @@ CIVController::CIVController(QObject* parent)
     , m_currentMode(0xFF)      // Invalid mode so first read always triggers update
     , m_currentModeName("---")
     , m_currentSMeter(0)
+    , m_currentTxStatus(false) // Start assuming RX
     , m_radioModel()
     , m_pollPhase(0)
 {
@@ -149,6 +150,12 @@ void CIVController::requestSMeter()
                                           CIVProtocol::SUBCMD_SMETER));
 }
 
+void CIVController::requestTXStatus()
+{
+    sendCommand(CIVProtocol::buildCommand(CIVProtocol::CMD_TX_STATUS,
+                                          CIVProtocol::SUBCMD_TX_STATE));
+}
+
 void CIVController::onReadyRead()
 {
     if (!m_serialPort) return;
@@ -180,17 +187,19 @@ void CIVController::onPollTimer()
         return;
     }
 
-    // S-Meter is polled every cycle for real-time display
+    // S-Meter and TX status are polled every cycle for real-time display
     // Frequency and Mode are polled less frequently (every 5th cycle each)
-    // This gives ~10 S-meter updates/sec at 100ms interval
+    // This gives ~10 S-meter/TX updates per second at 100ms interval
     //
     // Phase:  0   1   2   3   4   5   6   7   8   9   ...
     // SMeter: X   X   X   X   X   X   X   X   X   X   (every cycle)
+    // TXstat: X   X   X   X   X   X   X   X   X   X   (every cycle)
     // Freq:   X               X               X       (every 5th, phase 0)
     // Mode:       X               X               X   (every 5th, phase 1)
 
-    // Always request S-meter for real-time display
+    // Always request S-meter and TX status for real-time display
     requestSMeter();
+    requestTXStatus();
 
     // Request frequency every 5 cycles (phase 0, 5, 10, ...)
     if (m_pollPhase % 5 == 0) {
@@ -449,6 +458,27 @@ void CIVController::processFrame(const QByteArray& frame)
                 }
             } else {
                 qWarning() << "CIVController: Meter data too short:" << data.size() << "bytes (need 3)";
+            }
+            break;
+        }
+
+        case CIVProtocol::CMD_TX_STATUS:
+        {
+            // TX status response: subcommand + state byte
+            // Format: [subcmd 0x00] [state: 0x00=RX, 0x01=TX]
+            qDebug() << "CIVController: Processing TX_STATUS command, data size:" << data.size()
+                     << "data:" << data.toHex(' ');
+
+            if (data.size() >= 2) {
+                uint8_t subcmd = static_cast<uint8_t>(data[0]);
+                if (subcmd == CIVProtocol::SUBCMD_TX_STATE) {
+                    bool txActive = (static_cast<uint8_t>(data[1]) == 0x01);
+                    if (txActive != m_currentTxStatus) {
+                        m_currentTxStatus = txActive;
+                        qDebug() << "CIVController: TX status changed to:" << (txActive ? "TX" : "RX");
+                        emit txStatusChanged(txActive);
+                    }
+                }
             }
             break;
         }

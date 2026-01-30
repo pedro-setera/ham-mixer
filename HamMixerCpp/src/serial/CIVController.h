@@ -45,6 +45,7 @@ public:
     void requestFrequency() override;
     void requestMode() override;
     void requestSMeter() override;
+    void requestTXStatus();
 
     // Current values (cached from last poll)
     uint64_t currentFrequency() const override { return m_currentFrequencyHz; }
@@ -76,6 +77,7 @@ private:
     uint8_t m_currentMode;
     QString m_currentModeName;
     int m_currentSMeter;
+    bool m_currentTxStatus;  // true = transmitting
     QString m_radioModel;
 
     // Polling state machine
