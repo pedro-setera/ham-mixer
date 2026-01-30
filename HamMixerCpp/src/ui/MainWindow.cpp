@@ -184,22 +184,12 @@ void MainWindow::setupUI()
     );
     delayTopRow->addWidget(m_autoSyncToggle);
 
-    // Countdown timer label (shows "15s", "14s", ... or sync progress)
-    m_autoSyncCountdown = new QLabel("--", this);
-    m_autoSyncCountdown->setFixedWidth(45);
+    // Countdown timer label (shows "15s", "14s", ...)
+    m_autoSyncCountdown = new QLabel("", this);
+    m_autoSyncCountdown->setFixedWidth(35);
     m_autoSyncCountdown->setAlignment(Qt::AlignCenter);
     m_autoSyncCountdown->setStyleSheet(
-        "QLabel {"
-        "  font-family: 'Consolas';"
-        "  font-size: 11pt;"
-        "  font-weight: bold;"
-        "  color: #888;"
-        "  background-color: #2a2a2a;"
-        "  border: 1px solid #444;"
-        "  border-radius: 4px;"
-        "  padding: 2px 4px;"
-        "}"
-    );
+        "QLabel { font-family: 'Consolas'; font-size: 11pt; font-weight: bold; color: #666; }");
     m_autoSyncCountdown->setToolTip("Time until next auto-sync");
     delayTopRow->addWidget(m_autoSyncCountdown);
 
@@ -600,17 +590,7 @@ void MainWindow::onAutoSyncToggled(bool enabled)
         m_countdownSeconds = AUTO_SYNC_INTERVAL_SEC;
         m_autoSyncCountdown->setText(QString("%1s").arg(m_countdownSeconds));
         m_autoSyncCountdown->setStyleSheet(
-            "QLabel {"
-            "  font-family: 'Consolas';"
-            "  font-size: 11pt;"
-            "  font-weight: bold;"
-            "  color: #8f8;"
-            "  background-color: #2a3a2a;"
-            "  border: 1px solid #4a8;"
-            "  border-radius: 4px;"
-            "  padding: 2px 4px;"
-            "}"
-        );
+            "QLabel { font-family: 'Consolas'; font-size: 11pt; font-weight: bold; color: #8f8; }");
         m_countdownTimer->start(1000);  // Update every second
         m_autoSyncTimer->start(AUTO_SYNC_INTERVAL_SEC * 1000);
         qDebug() << "Auto-Sync: Enabled, interval =" << AUTO_SYNC_INTERVAL_SEC << "seconds";
@@ -618,19 +598,9 @@ void MainWindow::onAutoSyncToggled(bool enabled)
         // Stop everything
         m_autoSyncTimer->stop();
         m_countdownTimer->stop();
-        m_autoSyncCountdown->setText("--");
+        m_autoSyncCountdown->setText("");
         m_autoSyncCountdown->setStyleSheet(
-            "QLabel {"
-            "  font-family: 'Consolas';"
-            "  font-size: 11pt;"
-            "  font-weight: bold;"
-            "  color: #888;"
-            "  background-color: #2a2a2a;"
-            "  border: 1px solid #444;"
-            "  border-radius: 4px;"
-            "  padding: 2px 4px;"
-            "}"
-        );
+            "QLabel { font-family: 'Consolas'; font-size: 11pt; font-weight: bold; color: #666; }");
         qDebug() << "Auto-Sync: Disabled";
     }
     m_settings.markDirty();
@@ -640,22 +610,11 @@ void MainWindow::onCountdownTick()
 {
     MixerCore* mixer = m_audioManager->mixer();
 
-    // If currently syncing, show progress instead of countdown
+    // If currently syncing, hide countdown (progress shown in Sync button)
     if (mixer && mixer->isSyncCapturing()) {
-        int progress = static_cast<int>(mixer->getSyncProgress() * 100);
-        m_autoSyncCountdown->setText(QString("%1%").arg(progress));
+        m_autoSyncCountdown->setText("...");
         m_autoSyncCountdown->setStyleSheet(
-            "QLabel {"
-            "  font-family: 'Consolas';"
-            "  font-size: 11pt;"
-            "  font-weight: bold;"
-            "  color: #ff0;"
-            "  background-color: #3a3a2a;"
-            "  border: 1px solid #aa8;"
-            "  border-radius: 4px;"
-            "  padding: 2px 4px;"
-            "}"
-        );
+            "QLabel { font-family: 'Consolas'; font-size: 11pt; font-weight: bold; color: #ff0; }");
         return;
     }
 
@@ -667,30 +626,10 @@ void MainWindow::onCountdownTick()
         // Change color as it gets close to zero
         if (m_countdownSeconds <= 3) {
             m_autoSyncCountdown->setStyleSheet(
-                "QLabel {"
-                "  font-family: 'Consolas';"
-                "  font-size: 11pt;"
-                "  font-weight: bold;"
-                "  color: #fa0;"
-                "  background-color: #3a3a2a;"
-                "  border: 1px solid #a84;"
-                "  border-radius: 4px;"
-                "  padding: 2px 4px;"
-                "}"
-            );
+                "QLabel { font-family: 'Consolas'; font-size: 11pt; font-weight: bold; color: #fa0; }");
         } else {
             m_autoSyncCountdown->setStyleSheet(
-                "QLabel {"
-                "  font-family: 'Consolas';"
-                "  font-size: 11pt;"
-                "  font-weight: bold;"
-                "  color: #8f8;"
-                "  background-color: #2a3a2a;"
-                "  border: 1px solid #4a8;"
-                "  border-radius: 4px;"
-                "  padding: 2px 4px;"
-                "}"
-            );
+                "QLabel { font-family: 'Consolas'; font-size: 11pt; font-weight: bold; color: #8f8; }");
         }
     }
 }
