@@ -58,9 +58,13 @@ MainWindow::MainWindow(QWidget* parent)
     m_syncTimer = new QTimer(this);
     connect(m_syncTimer, &QTimer::timeout, this, &MainWindow::checkSyncResult);
 
-    // Auto-sync periodic timer (starts when toggle is enabled)
+    // Auto-sync periodic timer (triggers sync every N seconds)
     m_autoSyncTimer = new QTimer(this);
     connect(m_autoSyncTimer, &QTimer::timeout, this, &MainWindow::onAutoSyncTimerTick);
+
+    // Countdown display timer (updates every second)
+    m_countdownTimer = new QTimer(this);
+    connect(m_countdownTimer, &QTimer::timeout, this, &MainWindow::onCountdownTick);
 
     qDebug() << "MainWindow created";
 }
@@ -70,6 +74,7 @@ MainWindow::~MainWindow()
     m_meterTimer->stop();
     m_syncTimer->stop();
     m_autoSyncTimer->stop();
+    m_countdownTimer->stop();
 
     // Disconnect radio if connected
     if (m_radioController && m_radioController->isConnected()) {
@@ -132,27 +137,75 @@ void MainWindow::setupUI()
     controlsLayout->setContentsMargins(0, 0, 0, 0);
     controlsLayout->setSpacing(10);
 
-    // Delay controls - two rows: top row has button, toggle, and label, bottom row has slider
+    // Delay controls - two rows: top row has buttons and labels, bottom row has slider
     QGroupBox* delayGroup = new QGroupBox("Delay (Radio)", this);
-    delayGroup->setFixedHeight(145);  // +10px for taller row
+    delayGroup->setFixedHeight(145);
     QVBoxLayout* delayMainLayout = new QVBoxLayout(delayGroup);
     delayMainLayout->setSpacing(10);
 
-    // Top row: Sync button (left), Auto toggle (center), delay value (right)
+    // Top row: Sync button | Auto-Sync toggle + countdown | delay value
     QHBoxLayout* delayTopRow = new QHBoxLayout();
-    m_autoSyncButton = new QPushButton("Sync", this);
-    m_autoSyncButton->setToolTip("Detect optimal delay once");
-    m_autoSyncButton->setFixedWidth(60);
-    delayTopRow->addWidget(m_autoSyncButton);
+    delayTopRow->setSpacing(8);
+
+    // Manual Sync button
+    m_syncButton = new QPushButton("Sync", this);
+    m_syncButton->setToolTip("Detect and apply optimal delay once");
+    m_syncButton->setFixedSize(120, 28);
+    delayTopRow->addWidget(m_syncButton);
 
     delayTopRow->addStretch();
 
-    m_autoSyncToggle = new QCheckBox("Auto", this);
+    // Auto-Sync toggle button (checkable/toggle style)
+    m_autoSyncToggle = new QPushButton("Auto-Sync", this);
+    m_autoSyncToggle->setCheckable(true);
     m_autoSyncToggle->setToolTip("Enable continuous automatic sync every 15 seconds");
+    m_autoSyncToggle->setFixedSize(100, 28);
+    m_autoSyncToggle->setStyleSheet(
+        "QPushButton {"
+        "  background-color: #3a3a3a;"
+        "  border: 1px solid #555;"
+        "  border-radius: 4px;"
+        "  color: #aaa;"
+        "  font-weight: bold;"
+        "  padding: 4px 8px;"
+        "}"
+        "QPushButton:hover {"
+        "  background-color: #454545;"
+        "  border-color: #666;"
+        "}"
+        "QPushButton:checked {"
+        "  background-color: #2d5a2d;"
+        "  border: 1px solid #4a8;"
+        "  color: #8f8;"
+        "}"
+        "QPushButton:checked:hover {"
+        "  background-color: #3a6a3a;"
+        "}"
+    );
     delayTopRow->addWidget(m_autoSyncToggle);
 
+    // Countdown timer label (shows "15s", "14s", ... or sync progress)
+    m_autoSyncCountdown = new QLabel("--", this);
+    m_autoSyncCountdown->setFixedWidth(45);
+    m_autoSyncCountdown->setAlignment(Qt::AlignCenter);
+    m_autoSyncCountdown->setStyleSheet(
+        "QLabel {"
+        "  font-family: 'Consolas';"
+        "  font-size: 11pt;"
+        "  font-weight: bold;"
+        "  color: #888;"
+        "  background-color: #2a2a2a;"
+        "  border: 1px solid #444;"
+        "  border-radius: 4px;"
+        "  padding: 2px 4px;"
+        "}"
+    );
+    m_autoSyncCountdown->setToolTip("Time until next auto-sync");
+    delayTopRow->addWidget(m_autoSyncCountdown);
+
     delayTopRow->addStretch();
 
+    // Delay value label
     m_delayLabel = new QLabel("300 ms", this);
     m_delayLabel->setFixedWidth(70);
     m_delayLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
@@ -299,10 +352,10 @@ void MainWindow::connectSignals()
     connect(m_radioControlPanel, &RadioControlPanel::recordClicked,
             this, &MainWindow::onRecordClicked);
 
-    // Delay
+    // Delay and sync controls
     connect(m_delaySlider, &QSlider::valueChanged, this, &MainWindow::onDelayChanged);
-    connect(m_autoSyncButton, &QPushButton::clicked, this, &MainWindow::onAutoSyncClicked);
-    connect(m_autoSyncToggle, &QCheckBox::toggled, this, &MainWindow::onAutoSyncToggled);
+    connect(m_syncButton, &QPushButton::clicked, this, &MainWindow::onSyncClicked);
+    connect(m_autoSyncToggle, &QPushButton::toggled, this, &MainWindow::onAutoSyncToggled);
 
     // Crossfader
     connect(m_crossfader, &Crossfader::crossfaderChanged, this, &MainWindow::onCrossfaderChanged);
@@ -493,10 +546,10 @@ void MainWindow::onDelayChanged(int value)
     m_settings.markDirty();
 }
 
-void MainWindow::onAutoSyncClicked()
+void MainWindow::onSyncClicked()
 {
     if (!m_audioManager->isRunning()) {
-        QMessageBox::information(this, "Auto-Sync",
+        QMessageBox::information(this, "Sync",
             "Please connect first to start the audio streams.");
         return;
     }
@@ -507,7 +560,7 @@ void MainWindow::onAutoSyncClicked()
     // If already capturing, cancel
     if (mixer->isSyncCapturing()) {
         mixer->cancelSyncCapture();
-        m_autoSyncButton->setText("Auto-Sync");
+        m_syncButton->setText("Sync");
         m_syncTimer->stop();
         return;
     }
@@ -526,15 +579,15 @@ void MainWindow::onAutoSyncClicked()
             radioMode == CIVProtocol::MODE_RTTY ||
             radioMode == CIVProtocol::MODE_RTTY_R) {
             syncMode = AudioSync::CW;
-            qDebug() << "Auto-Sync: Using CW mode (tone-based, pitch-independent)";
+            qDebug() << "Sync: Using CW mode (tone-based, pitch-independent)";
         } else {
-            qDebug() << "Auto-Sync: Using VOICE mode (VAD-based)";
+            qDebug() << "Sync: Using VOICE mode (VAD-based)";
         }
     }
 
     // Start sync capture with the appropriate mode
     mixer->startSyncCapture(syncMode);
-    m_autoSyncButton->setText("Syncing...");
+    m_syncButton->setText("Syncing...");
 
     // Start timer to monitor progress
     m_syncTimer->start(100);  // Check every 100ms
@@ -543,15 +596,103 @@ void MainWindow::onAutoSyncClicked()
 void MainWindow::onAutoSyncToggled(bool enabled)
 {
     if (enabled) {
-        // Start periodic auto-sync timer
-        m_autoSyncTimer->start(AUTO_SYNC_INTERVAL_MS);
-        qDebug() << "Auto-Sync: Enabled, interval =" << AUTO_SYNC_INTERVAL_MS << "ms";
+        // Start countdown and periodic sync
+        m_countdownSeconds = AUTO_SYNC_INTERVAL_SEC;
+        m_autoSyncCountdown->setText(QString("%1s").arg(m_countdownSeconds));
+        m_autoSyncCountdown->setStyleSheet(
+            "QLabel {"
+            "  font-family: 'Consolas';"
+            "  font-size: 11pt;"
+            "  font-weight: bold;"
+            "  color: #8f8;"
+            "  background-color: #2a3a2a;"
+            "  border: 1px solid #4a8;"
+            "  border-radius: 4px;"
+            "  padding: 2px 4px;"
+            "}"
+        );
+        m_countdownTimer->start(1000);  // Update every second
+        m_autoSyncTimer->start(AUTO_SYNC_INTERVAL_SEC * 1000);
+        qDebug() << "Auto-Sync: Enabled, interval =" << AUTO_SYNC_INTERVAL_SEC << "seconds";
     } else {
-        // Stop periodic auto-sync
+        // Stop everything
         m_autoSyncTimer->stop();
+        m_countdownTimer->stop();
+        m_autoSyncCountdown->setText("--");
+        m_autoSyncCountdown->setStyleSheet(
+            "QLabel {"
+            "  font-family: 'Consolas';"
+            "  font-size: 11pt;"
+            "  font-weight: bold;"
+            "  color: #888;"
+            "  background-color: #2a2a2a;"
+            "  border: 1px solid #444;"
+            "  border-radius: 4px;"
+            "  padding: 2px 4px;"
+            "}"
+        );
         qDebug() << "Auto-Sync: Disabled";
     }
     m_settings.markDirty();
+}
+
+void MainWindow::onCountdownTick()
+{
+    MixerCore* mixer = m_audioManager->mixer();
+
+    // If currently syncing, show progress instead of countdown
+    if (mixer && mixer->isSyncCapturing()) {
+        int progress = static_cast<int>(mixer->getSyncProgress() * 100);
+        m_autoSyncCountdown->setText(QString("%1%").arg(progress));
+        m_autoSyncCountdown->setStyleSheet(
+            "QLabel {"
+            "  font-family: 'Consolas';"
+            "  font-size: 11pt;"
+            "  font-weight: bold;"
+            "  color: #ff0;"
+            "  background-color: #3a3a2a;"
+            "  border: 1px solid #aa8;"
+            "  border-radius: 4px;"
+            "  padding: 2px 4px;"
+            "}"
+        );
+        return;
+    }
+
+    // Normal countdown
+    if (m_countdownSeconds > 0) {
+        m_countdownSeconds--;
+        m_autoSyncCountdown->setText(QString("%1s").arg(m_countdownSeconds));
+
+        // Change color as it gets close to zero
+        if (m_countdownSeconds <= 3) {
+            m_autoSyncCountdown->setStyleSheet(
+                "QLabel {"
+                "  font-family: 'Consolas';"
+                "  font-size: 11pt;"
+                "  font-weight: bold;"
+                "  color: #fa0;"
+                "  background-color: #3a3a2a;"
+                "  border: 1px solid #a84;"
+                "  border-radius: 4px;"
+                "  padding: 2px 4px;"
+                "}"
+            );
+        } else {
+            m_autoSyncCountdown->setStyleSheet(
+                "QLabel {"
+                "  font-family: 'Consolas';"
+                "  font-size: 11pt;"
+                "  font-weight: bold;"
+                "  color: #8f8;"
+                "  background-color: #2a3a2a;"
+                "  border: 1px solid #4a8;"
+                "  border-radius: 4px;"
+                "  padding: 2px 4px;"
+                "}"
+            );
+        }
+    }
 }
 
 void MainWindow::onAutoSyncTimerTick()
@@ -583,9 +724,12 @@ void MainWindow::onAutoSyncTimerTick()
         }
     }
 
+    // Reset countdown for next cycle
+    m_countdownSeconds = AUTO_SYNC_INTERVAL_SEC;
+
     // Start sync capture
     mixer->startSyncCapture(syncMode);
-    m_autoSyncButton->setText("Syncing...");
+    m_syncButton->setText("Syncing...");
 
     // Start timer to monitor progress
     m_syncTimer->start(100);
@@ -707,14 +851,14 @@ void MainWindow::checkSyncResult()
     // Update progress display
     if (mixer->isSyncCapturing()) {
         int progress = static_cast<int>(mixer->getSyncProgress() * 100);
-        m_autoSyncButton->setText(QString("Syncing %1%").arg(progress));
+        m_syncButton->setText(QString("Syncing %1%").arg(progress));
         return;
     }
 
     // Check if result is ready
     if (mixer->hasSyncResult()) {
         m_syncTimer->stop();
-        m_autoSyncButton->setText("Sync");
+        m_syncButton->setText("Sync");
 
         AudioSync::SyncResult result = mixer->getSyncResult();
         bool wasAutoTriggered = m_isAutoTriggeredSync;

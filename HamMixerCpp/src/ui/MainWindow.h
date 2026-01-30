@@ -7,7 +7,6 @@
 #include <QSlider>
 #include <QLabel>
 #include <QPushButton>
-#include <QCheckBox>
 #include <QMenu>
 #include <memory>
 #include <deque>
@@ -39,9 +38,10 @@ protected:
 private slots:
     void onRecordClicked();
     void onDelayChanged(int value);
-    void onAutoSyncClicked();
+    void onSyncClicked();
     void onAutoSyncToggled(bool enabled);
     void onAutoSyncTimerTick();
+    void onCountdownTick();
     void onCrossfaderChanged(float radioVol, float radioPan, float websdrVol, float websdrPan);
     void updateMeters();
     void checkSyncResult();
@@ -120,13 +120,16 @@ private:
     // Delay controls
     QSlider* m_delaySlider;
     QLabel* m_delayLabel;
-    QPushButton* m_autoSyncButton;
-    QCheckBox* m_autoSyncToggle;
+    QPushButton* m_syncButton;
+    QPushButton* m_autoSyncToggle;
+    QLabel* m_autoSyncCountdown;
 
     // Auto-sync timer and settings
     QTimer* m_autoSyncTimer;
+    QTimer* m_countdownTimer;
+    int m_countdownSeconds = 0;
     bool m_isAutoTriggeredSync = false;
-    static constexpr int AUTO_SYNC_INTERVAL_MS = 15000;      // 15 seconds between auto-syncs
+    static constexpr int AUTO_SYNC_INTERVAL_SEC = 15;        // 15 seconds between auto-syncs
     static constexpr float AUTO_SYNC_THRESHOLD_MS = 200.0f;  // Max allowed delta from current delay
 
     // Timers
