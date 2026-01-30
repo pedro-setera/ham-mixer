@@ -48,14 +48,18 @@ Whether you're chasing DX, monitoring propagation, or comparing reception betwee
 - **S-Meter extraction** - Real-time signal level from SDR
 
 ### Time Synchronization
+- **Automatic Voice/CW mode detection** - Sync algorithm adapts based on radio's operating mode:
+  - **Voice mode (SSB/AM/FM)** - Uses VAD, 300-3000 Hz bandpass, 1.5s capture
+  - **CW mode (CW/RTTY)** - Pitch-independent envelope correlation, 400-1000 Hz bandpass, 1.0s capture
 - **Robust GCC-PHAT algorithm** - Enhanced delay detection with 6 robustness improvements:
   - **Signal Normalization** - Equalizes volume differences between channels
-  - **Voice Activity Detection (VAD)** - Only correlates speech segments (threshold 0.005 RMS)
-  - **Envelope Correlation (Hilbert Transform)** - Extracts amplitude envelope for phase-distortion immunity
+  - **Voice Activity Detection (VAD)** - Only correlates speech segments in Voice mode (threshold 0.005 RMS)
+  - **Envelope Correlation (Hilbert Transform)** - Extracts amplitude envelope; essential for pitch-independent CW sync
   - **Multiband Analysis** - Divides spectrum into 4 bands, weights by SNR
   - **GCC-PHAT-beta** - Adjustable whitening (beta=0.7) reduces noise amplification
   - **Symmetric Lag Detection** - Equal sensitivity for positive/negative delays
-- **Auto-sync button** - Automatically align audio streams (1.5-second capture window)
+- **Auto-sync button** - Automatically align audio streams (works for both voice and CW)
+- **CW pitch-independent** - Works with any CW sidetone pitch from 400 Hz to 1000 Hz
 - **Manual delay control** - 0-2000ms adjustable delay for distant SDR sites
 - **Handles challenging conditions** - QSB (fading), QRM (interference), weak signals, volume differences
 - **Bidirectional detection** - Works when WebSDR is ahead or behind the radio signal
@@ -279,7 +283,8 @@ build.bat
 - Kenwood/Elecraft/Yaesu: 38400, 9600, or 4800 baud
 
 ### Audio out of sync
-- Click **Auto-Sync** button during voice transmission
+- Click **Auto-Sync** button during transmission (works for both voice and CW)
+- For CW: any sidetone pitch from 400-1000 Hz is supported automatically
 - Manually adjust delay slider if auto-sync fails
 - Typical internet delay: 200-500ms for WebSDR, 1000-1500ms for distant KiwiSDR
 
