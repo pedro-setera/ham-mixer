@@ -483,7 +483,7 @@ void MainWindow::applySettingsToUI()
 
         if (!showBrowser) {
             // Start in compact mode - same height as toggle function
-            static constexpr int COMPACT_HEIGHT = 390;
+            static constexpr int COMPACT_HEIGHT = 411;
             m_browserGroup->hide();
             setMinimumSize(1200, COMPACT_HEIGHT);
             resize(width(), COMPACT_HEIGHT);
@@ -1568,8 +1568,8 @@ void MainWindow::onToggleWebSdrView(bool checked)
     // Update setting
     m_settings.webSdr().showBrowser = checked;
 
-    // Compact mode height: RadioControlPanel (~60) + Content (~290) + margins (~30) = ~380
-    static constexpr int COMPACT_HEIGHT = 390;
+    // Compact mode height: RadioControlPanel (~60) + Content (~290) + margins (~60) = ~411
+    static constexpr int COMPACT_HEIGHT = 411;
 
     if (checked) {
         // Show WebSDR browser view (full mode)
