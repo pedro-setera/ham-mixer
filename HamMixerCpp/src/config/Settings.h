@@ -57,6 +57,7 @@ public:
         QString portName;
         int baudRate = 57600;
         bool autoConnect = false;
+        int dialStepIndex = 1;  // Index into step sizes (0=10Hz, 1=100Hz, 2=1kHz, 3=10kHz, 4=100kHz)
     };
 
     // WebSDR settings

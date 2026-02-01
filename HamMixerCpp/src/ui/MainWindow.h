@@ -20,9 +20,10 @@
 #include "ui/Crossfader.h"
 #include "ui/SMeter.h"
 #include "ui/RadioControlPanel.h"
-#include "ui/RadioControlWindow.h"
 #include "serial/RadioController.h"
 #include "websdr/WebSdrManager.h"
+
+#include <QButtonGroup>
 
 /**
  * @brief Main application window
@@ -36,6 +37,8 @@ public:
 
 protected:
     void closeEvent(QCloseEvent* event) override;
+    void keyPressEvent(QKeyEvent* event) override;
+    bool event(QEvent* event) override;
 
 private slots:
     void onRecordClicked();
@@ -70,8 +73,13 @@ private slots:
     // View toggle
     void onToggleWebSdrView(bool checked);
 
-    // Radio Control window
-    void onShowRadioControl();
+    // Band/Mode/Tuner/Voice controls
+    void onBandSelected(int bandIndex);
+    void onModeSelected(int modeIndex);
+    void onTuneClicked();
+    void onTunerToggled();
+    void onVoiceMemoryClicked();
+    void onTunerStateChanged(bool enabled);
 
     // Config file management
     void onSaveConfig();
@@ -155,8 +163,63 @@ private:
     // WebSDR browser view
     QGroupBox* m_browserGroup;
 
-    // Radio Control window
-    RadioControlWindow* m_radioControlWindow;
+    // Band/Mode/Tuner/Voice controls
+    QButtonGroup* m_bandGroup;
+    QButtonGroup* m_modeGroup;
+    QPushButton* m_bandButtons[10];
+    QPushButton* m_modeButtons[5];
+    QPushButton* m_tuneButton;
+    QPushButton* m_tunerToggle;
+    bool m_tunerEnabled = false;
+    QPushButton* m_voiceButtons[8];
+    int m_activeVoiceMemory = 0;  // 0 = none, 1-8 = active memory
+    QStringList m_voiceMemoryLabels;
+
+    // Band definitions (MHz)
+    static constexpr double BANDS[10] = {1.8, 3.5, 7.0, 10.0, 14.0, 18.0, 21.0, 24.0, 28.0, 50.0};
+    static constexpr int BAND_COUNT = 10;
+
+    // Band frequency defaults (Hz) - center frequencies
+    static constexpr uint64_t BAND_FREQS[10] = {
+        1840000,   // 160m
+        3573000,   // 80m (FT8)
+        7074000,   // 40m (FT8)
+        10136000,  // 30m (FT8)
+        14074000,  // 20m (FT8)
+        18100000,  // 17m
+        21074000,  // 15m (FT8)
+        24915000,  // 12m
+        28074000,  // 10m (FT8)
+        50313000   // 6m (FT8)
+    };
+
+    // Mode definitions (CI-V codes) - simplified: LSB, USB, CW, AM, FM
+    static constexpr uint8_t MODE_CODES[5] = {
+        0x00,  // LSB
+        0x01,  // USB
+        0x03,  // CW
+        0x02,  // AM
+        0x05   // FM
+    };
+    static constexpr int MODE_COUNT = 5;
+
+    // USB jog wheel dial handling
+    bool m_dialActive = false;         // True while actively dialing (suppresses radio feedback)
+    qint64 m_lastDialCommandTime = 0;  // Rate limit: max ~10 commands/sec
+    QTimer* m_dialInactiveTimer;       // Fires when dial stops (resumes radio feedback)
+    uint64_t m_localFrequency = 0;     // Local frequency for dial feedback
+
+    void handleDialInput(int direction);  // +1 = up, -1 = down
+    void onDialInactive();
+
+    // Radio controls helpers
+    QWidget* createRadioControlsSection();
+    void updateBandSelection(uint64_t freqHz);
+    void updateModeSelection(uint8_t mode);
+    int frequencyToBandIndex(uint64_t freqHz) const;
+    int modeToIndex(uint8_t mode) const;
+    void setRadioControlsEnabled(bool enabled);
+    void updateVoiceButtonStates();
 
     void setupWindow();
     void setupUI();

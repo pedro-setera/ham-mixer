@@ -308,6 +308,7 @@ QJsonObject Settings::toJson() const
     serial["port"] = m_serial.portName;
     serial["baud_rate"] = m_serial.baudRate;
     serial["auto_connect"] = m_serial.autoConnect;
+    serial["dial_step_index"] = m_serial.dialStepIndex;
     root["serial"] = serial;
 
     // WebSDR
@@ -391,6 +392,7 @@ void Settings::fromJson(const QJsonObject& json)
     m_serial.portName = serial["port"].toString();
     m_serial.baudRate = serial["baud_rate"].toInt(57600);
     m_serial.autoConnect = serial["auto_connect"].toBool(false);
+    m_serial.dialStepIndex = serial["dial_step_index"].toInt(1);  // Default 100Hz (index 1)
 
     // WebSDR
     QJsonObject webSdr = json["websdr"].toObject();

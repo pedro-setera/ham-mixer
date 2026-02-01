@@ -18,6 +18,7 @@
 #include "serial/RadioController.h"
 #include "websdr/WebSdrSite.h"
 #include "websdr/WebSdrController.h"
+#include "ui/FrequencyLCD.h"
 
 /**
  * @brief Compact panel containing CI-V, WebSDR, Radio Info, and Tools sections
@@ -65,6 +66,9 @@ public:
     void setWebSdrViewVisible(bool visible);
     bool isWebSdrViewVisible() const { return m_webSdrViewVisible; }
 
+    // TX status
+    bool isTransmitting() const { return m_transmitting; }
+
 signals:
     void serialConnectClicked();
     void serialDisconnectClicked();
@@ -75,7 +79,6 @@ signals:
 
     // Tools signals
     void recordClicked(bool checked);
-    void radioControlClicked();
 
 private slots:
     void onConnectButtonClicked();
@@ -86,7 +89,6 @@ private:
     void setupUI();
     void connectSignals();
     void updateConnectButtonStyle();
-    QString formatFrequency(uint64_t frequencyHz) const;
 
     // Serial controls
     QComboBox* m_portCombo;
@@ -99,7 +101,7 @@ private:
     bool m_webSdrViewVisible;
 
     // Info display
-    QLabel* m_frequencyLabel;
+    FrequencyLCD* m_frequencyLCD;
     QLabel* m_modeLabel;
 
     // Tools controls
@@ -107,7 +109,6 @@ private:
     QLabel* m_recordIndicator;
     QLabel* m_txLabel;
     QLabel* m_txIndicator;
-    QPushButton* m_radioControlButton;
     QTimer* m_blinkTimer;
     bool m_recording;
     bool m_blinkState;
@@ -119,6 +120,20 @@ private:
 
     // Radio Info group box (for title updates)
     QGroupBox* m_radioInfoGroup;
+
+    // Dial step handling
+    int m_dialStepIndex = 1;  // Index into DIAL_STEPS array (default 100 Hz)
+    static constexpr int DIAL_STEPS[] = {10, 100, 1000, 10000, 100000};
+    static constexpr int DIAL_STEP_COUNT = 5;
+
+public:
+    // Dial step control (for USB jog wheel from MainWindow)
+    int dialStepIndex() const { return m_dialStepIndex; }
+    void setDialStepIndex(int index);
+    int currentDialStep() const { return DIAL_STEPS[m_dialStepIndex]; }
+    void cycleDialStep();
+    void updateHighlightDigit();
+    QString formatStepSize(int hz) const;
 };
 
 #endif // RADIOCONTROLPANEL_H

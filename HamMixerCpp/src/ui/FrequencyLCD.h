@@ -54,6 +54,21 @@ public:
      */
     void setDimDigitColor(const QColor& color);
 
+    /**
+     * @brief Set whether to show the "kHz" label
+     */
+    void setShowUnit(bool show);
+
+    /**
+     * @brief Set the display height (scales all dimensions proportionally)
+     */
+    void setDisplayHeight(int height);
+
+    /**
+     * @brief Set which digit position to highlight (0 = rightmost, -1 = none)
+     */
+    void setHighlightDigit(int positionFromRight);
+
     QSize sizeHint() const override;
     QSize minimumSizeHint() const override;
 
@@ -66,10 +81,15 @@ private:
     QColor m_backgroundColor = QColor(15, 20, 25);       // Dark blue-gray
     QColor m_digitColor = QColor(0, 255, 100);           // Bright green LCD
     QColor m_dimDigitColor = QColor(0, 22, 12);          // Dim segments (darker for better contrast)
+    QColor m_highlightColor = QColor(255, 255, 100);     // Yellow highlight for step digit
+
+    bool m_showUnit = true;           // Whether to show "kHz" label
+    int m_displayHeight = 48;         // Configurable display height
+    int m_highlightDigit = -1;        // Which digit to highlight (-1 = none, 0 = rightmost)
 
     // 7-segment rendering
-    void drawDigit(QPainter& painter, int x, int y, int digit, int height, bool dim = false);
-    void drawSegment(QPainter& painter, int x, int y, int segment, int height, bool lit);
+    void drawDigit(QPainter& painter, int x, int y, int digit, int height, bool dim = false, bool highlighted = false);
+    void drawSegment(QPainter& painter, int x, int y, int segment, int height, bool lit, bool highlighted = false);
     void drawDecimalPoint(QPainter& painter, int x, int y, int height, bool lit = true);
     void drawMHzLabel(QPainter& painter, int x, int y);
 
@@ -92,14 +112,23 @@ private:
         0b1101111   // 9: a,b,c,d,f,g
     };
 
-    // Dimensions - sized for visibility
-    static constexpr int DIGIT_HEIGHT = 48;
-    static constexpr int DIGIT_WIDTH = 28;
-    static constexpr int DIGIT_SPACING = 4;
-    static constexpr int GROUP_SPACING = 8;    // Extra space around decimal points
-    static constexpr int DOT_SIZE = 6;
-    static constexpr int PADDING = 12;
-    static constexpr int SEGMENT_THICKNESS = 5;
+    // Base dimensions (at height 48) - scaled proportionally
+    static constexpr int BASE_HEIGHT = 48;
+    static constexpr int BASE_WIDTH = 28;
+    static constexpr int BASE_SPACING = 4;
+    static constexpr int BASE_GROUP_SPACING = 8;
+    static constexpr int BASE_DOT_SIZE = 6;
+    static constexpr int BASE_PADDING = 8;
+    static constexpr int BASE_SEGMENT_THICKNESS = 5;
+
+    // Scaled dimension helpers
+    int digitHeight() const { return m_displayHeight; }
+    int digitWidth() const { return m_displayHeight * BASE_WIDTH / BASE_HEIGHT; }
+    int digitSpacing() const { return std::max(2, m_displayHeight * BASE_SPACING / BASE_HEIGHT); }
+    int groupSpacing() const { return std::max(4, m_displayHeight * BASE_GROUP_SPACING / BASE_HEIGHT); }
+    int dotSize() const { return std::max(3, m_displayHeight * BASE_DOT_SIZE / BASE_HEIGHT); }
+    int padding() const { return std::max(4, m_displayHeight * BASE_PADDING / BASE_HEIGHT); }
+    int segmentThickness() const { return std::max(2, m_displayHeight * BASE_SEGMENT_THICKNESS / BASE_HEIGHT); }
 };
 
 #endif // FREQUENCYLCD_H

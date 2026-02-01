@@ -15,12 +15,15 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QCloseEvent>
+#include <QKeyEvent>
+#include <QDateTime>
 #include <QSplitter>
 #include <QIcon>
 #include <QDebug>
 #include <QWebEngineView>
 #include <QFileDialog>
 #include <QDir>
+#include <QGridLayout>
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -32,7 +35,6 @@ MainWindow::MainWindow(QWidget* parent)
     , m_websdrSmeterValid(false)
     , m_recentConfigsMenu(nullptr)
     , m_browserGroup(nullptr)
-    , m_radioControlWindow(nullptr)
 {
     // Start S-meter delay timer
     m_smeterTimer.start();
@@ -70,6 +72,12 @@ MainWindow::MainWindow(QWidget* parent)
     m_countdownTimer = new QTimer(this);
     connect(m_countdownTimer, &QTimer::timeout, this, &MainWindow::onCountdownTick);
 
+    // Dial inactive timer - resumes radio frequency feedback after dial stops
+    m_dialInactiveTimer = new QTimer(this);
+    m_dialInactiveTimer->setInterval(500);  // 500ms after last dial input
+    m_dialInactiveTimer->setSingleShot(true);
+    connect(m_dialInactiveTimer, &QTimer::timeout, this, &MainWindow::onDialInactive);
+
     qDebug() << "MainWindow created";
 }
 
@@ -79,6 +87,7 @@ MainWindow::~MainWindow()
     m_syncTimer->stop();
     m_autoSyncTimer->stop();
     m_countdownTimer->stop();
+    m_dialInactiveTimer->stop();
 
     // Disconnect radio if connected
     if (m_radioController && m_radioController->isConnected()) {
@@ -103,7 +112,7 @@ void MainWindow::setupWindow()
 {
     setWindowTitle(QString("%1 v%2 (%3)").arg(HAMMIXER_APP_NAME).arg(HAMMIXER_VERSION_STRING).arg(HAMMIXER_VERSION_DATE));
     setWindowIcon(QIcon(":/icons/icons/antenna.png"));
-    setMinimumSize(1200, 876);  // +50px more for KiwiSDR browser room
+    setMinimumSize(1200, 896);  // Reduced WebSDR browser by 100px
     resize(m_settings.window().size.width(), m_settings.window().size.height());
     move(m_settings.window().position);
 
@@ -276,16 +285,19 @@ void MainWindow::setupUI()
 
     mainLayout->addLayout(contentLayout);
 
+    // ========== Radio Controls Section (Band, Mode, Tuner, Voice) ==========
+    mainLayout->addWidget(createRadioControlsSection());
+
     // ========== Embedded WebSDR Browser (bottom section) ==========
     m_browserGroup = new QGroupBox("WebSDR Browser", this);
-    m_browserGroup->setFixedHeight(450);  // +50px more for KiwiSDR browser room
+    m_browserGroup->setFixedHeight(350);  // Reduced by 100px
     m_browserGroup->setContentsMargins(0, 0, 0, 0);  // Remove group box margins
     QVBoxLayout* browserLayout = new QVBoxLayout(m_browserGroup);
     browserLayout->setContentsMargins(5, 0, 5, 5);  // Reduced top margin to avoid double spacing
 
     // Create a container widget for the browser with its own layout
     QWidget* browserContainer = new QWidget(m_browserGroup);
-    browserContainer->setMinimumHeight(360);  // +50px more for KiwiSDR
+    browserContainer->setMinimumHeight(260);  // Reduced by 100px
     QVBoxLayout* containerLayout = new QVBoxLayout(browserContainer);
     containerLayout->setContentsMargins(0, 0, 0, 0);
     containerLayout->setSpacing(0);
@@ -343,13 +355,246 @@ void MainWindow::setupMenuBar()
     });
 }
 
+QWidget* MainWindow::createRadioControlsSection()
+{
+    QWidget* container = new QWidget(this);
+    QHBoxLayout* mainLayout = new QHBoxLayout(container);
+    mainLayout->setContentsMargins(0, 0, 0, 0);
+    mainLayout->setSpacing(10);
+
+    // Common button dimensions
+    static constexpr int BUTTON_WIDTH = 46;
+    static constexpr int BUTTON_HEIGHT = 40;
+    static constexpr int BUTTON_SPACING = 4;
+
+    // ===== Band Section (2 rows x 5 cols) - Fixed width =====
+    QGroupBox* bandGroup = new QGroupBox("Band", container);
+    bandGroup->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
+    QGridLayout* bandLayout = new QGridLayout(bandGroup);
+    bandLayout->setSpacing(BUTTON_SPACING);
+    bandLayout->setContentsMargins(8, 8, 8, 8);
+
+    m_bandGroup = new QButtonGroup(this);
+    m_bandGroup->setExclusive(true);
+
+    // Two-line labels: wavelength on top, frequency below
+    const char* bandWavelengths[] = {"160m", "80m", "40m", "30m", "20m", "17m", "15m", "12m", "10m", "6m"};
+    const char* bandFreqs[] = {"1.8", "3.5", "7", "10", "14", "18", "21", "24", "28", "50"};
+
+    QString bandButtonStyle =
+        "QPushButton { "
+        "  background-color: #3A3A3A; "
+        "  border: 1px solid #555; "
+        "  border-radius: 4px; "
+        "  padding: 2px 2px; "
+        "  font-weight: bold; "
+        "  font-size: 9pt; "
+        "  color: #DDD; "
+        "}"
+        "QPushButton:hover { background-color: #4A4A4A; }"
+        "QPushButton:pressed { background-color: #2A2A2A; }"
+        "QPushButton:checked { "
+        "  background-color: #2196F3; "
+        "  color: white; "
+        "  border-color: #42A5F5; "
+        "}"
+        "QPushButton:disabled { "
+        "  background-color: #2A2A2A; "
+        "  color: #555; "
+        "}";
+
+    // Row 0: 160m, 80m, 40m, 30m, 20m (indices 0-4)
+    // Row 1: 17m, 15m, 12m, 10m, 6m (indices 5-9)
+    for (int i = 0; i < BAND_COUNT; i++) {
+        QString label = QString("%1\n%2").arg(bandWavelengths[i]).arg(bandFreqs[i]);
+        QPushButton* btn = new QPushButton(label, bandGroup);
+        btn->setCheckable(true);
+        btn->setAutoDefault(false);
+        btn->setDefault(false);
+        btn->setFixedSize(BUTTON_WIDTH, BUTTON_HEIGHT);
+        btn->setStyleSheet(bandButtonStyle);
+        btn->setToolTip(QString("%1 band (%2 MHz)").arg(bandWavelengths[i]).arg(bandFreqs[i]));
+        btn->setEnabled(false);  // Disabled until connected
+        m_bandButtons[i] = btn;
+        m_bandGroup->addButton(btn, i);
+
+        int row = (i < 5) ? 0 : 1;
+        int col = (i < 5) ? i : (i - 5);
+        bandLayout->addWidget(btn, row, col);
+    }
+
+    connect(m_bandGroup, QOverload<int>::of(&QButtonGroup::idClicked),
+            this, &MainWindow::onBandSelected);
+
+    mainLayout->addWidget(bandGroup, 0);  // stretch = 0 (fixed)
+
+    // ===== Mode + Tuner Section - Fixed width (same as Band) =====
+    QGroupBox* modeTunerGroup = new QGroupBox("Mode / Tuner", container);
+    modeTunerGroup->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
+    QVBoxLayout* modeTunerLayout = new QVBoxLayout(modeTunerGroup);
+    modeTunerLayout->setSpacing(BUTTON_SPACING);
+    modeTunerLayout->setContentsMargins(8, 8, 8, 8);
+
+    // Mode row
+    QHBoxLayout* modeLayout = new QHBoxLayout();
+    modeLayout->setSpacing(BUTTON_SPACING);
+
+    m_modeGroup = new QButtonGroup(this);
+    m_modeGroup->setExclusive(true);
+
+    const char* modeLabels[] = {"LSB", "USB", "CW", "AM", "FM"};
+
+    QString modeButtonStyle =
+        "QPushButton { "
+        "  background-color: #3A3A3A; "
+        "  border: 1px solid #555; "
+        "  border-radius: 4px; "
+        "  padding: 2px 2px; "
+        "  font-weight: bold; "
+        "  font-size: 9pt; "
+        "  color: #DDD; "
+        "}"
+        "QPushButton:hover { background-color: #4A4A4A; }"
+        "QPushButton:pressed { background-color: #2A2A2A; }"
+        "QPushButton:checked { "
+        "  background-color: #4CAF50; "
+        "  color: white; "
+        "  border-color: #66BB6A; "
+        "}"
+        "QPushButton:disabled { "
+        "  background-color: #2A2A2A; "
+        "  color: #555; "
+        "}";
+
+    for (int i = 0; i < MODE_COUNT; i++) {
+        QPushButton* btn = new QPushButton(modeLabels[i], modeTunerGroup);
+        btn->setCheckable(true);
+        btn->setAutoDefault(false);
+        btn->setDefault(false);
+        btn->setFixedSize(BUTTON_WIDTH, BUTTON_HEIGHT);
+        btn->setStyleSheet(modeButtonStyle);
+        btn->setEnabled(false);  // Disabled until connected
+        m_modeButtons[i] = btn;
+        m_modeGroup->addButton(btn, i);
+        modeLayout->addWidget(btn);
+    }
+
+    modeTunerLayout->addLayout(modeLayout);
+
+    // Tuner row
+    QHBoxLayout* tunerLayout = new QHBoxLayout();
+    tunerLayout->setSpacing(BUTTON_SPACING);
+
+    m_tuneButton = new QPushButton("TUNE", modeTunerGroup);
+    m_tuneButton->setAutoDefault(false);
+    m_tuneButton->setDefault(false);
+    m_tuneButton->setFixedHeight(BUTTON_HEIGHT);
+    m_tuneButton->setStyleSheet(
+        "QPushButton { "
+        "  background-color: #FF9800; "
+        "  border: 1px solid #FFB74D; "
+        "  border-radius: 4px; "
+        "  padding: 2px 10px; "
+        "  font-weight: bold; "
+        "  font-size: 10pt; "
+        "  color: #222; "
+        "}"
+        "QPushButton:hover { background-color: #FFB74D; }"
+        "QPushButton:pressed { background-color: #E65100; }"
+        "QPushButton:disabled { background-color: #5A4A20; color: #888; }"
+    );
+    m_tuneButton->setToolTip("Start antenna tuner");
+    m_tuneButton->setEnabled(false);
+    connect(m_tuneButton, &QPushButton::clicked, this, &MainWindow::onTuneClicked);
+
+    m_tunerToggle = new QPushButton("ATU OFF", modeTunerGroup);
+    m_tunerToggle->setAutoDefault(false);
+    m_tunerToggle->setDefault(false);
+    m_tunerToggle->setCheckable(true);
+    m_tunerToggle->setFixedHeight(BUTTON_HEIGHT);
+    m_tunerToggle->setStyleSheet(
+        "QPushButton { "
+        "  background-color: #424242; "
+        "  border: 1px solid #555; "
+        "  border-radius: 4px; "
+        "  padding: 2px 10px; "
+        "  font-weight: bold; "
+        "  font-size: 10pt; "
+        "  color: #AAA; "
+        "}"
+        "QPushButton:hover { background-color: #4A4A4A; }"
+        "QPushButton:checked { "
+        "  background-color: #388E3C; "
+        "  color: white; "
+        "  border-color: #4CAF50; "
+        "}"
+        "QPushButton:disabled { background-color: #2A2A2A; color: #555; }"
+    );
+    m_tunerToggle->setToolTip("Toggle antenna tuner on/off");
+    m_tunerToggle->setEnabled(false);
+    connect(m_tunerToggle, &QPushButton::clicked, this, &MainWindow::onTunerToggled);
+
+    tunerLayout->addWidget(m_tuneButton, 1);  // stretch = 1
+    tunerLayout->addWidget(m_tunerToggle, 1);  // stretch = 1
+
+    modeTunerLayout->addLayout(tunerLayout);
+
+    connect(m_modeGroup, QOverload<int>::of(&QButtonGroup::idClicked),
+            this, &MainWindow::onModeSelected);
+
+    mainLayout->addWidget(modeTunerGroup, 0);  // stretch = 0 (fixed)
+
+    // ===== Voice Memory Section (2 rows x 4 cols) - Expands to fill =====
+    QGroupBox* voiceGroup = new QGroupBox("Voice Memory", container);
+    voiceGroup->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    QGridLayout* voiceLayout = new QGridLayout(voiceGroup);
+    voiceLayout->setSpacing(BUTTON_SPACING);
+    voiceLayout->setContentsMargins(8, 8, 8, 8);
+
+    QString voiceButtonStyle =
+        "QPushButton { "
+        "  background-color: #3A3A3A; "
+        "  border: 1px solid #555; "
+        "  border-radius: 4px; "
+        "  padding: 2px 4px; "
+        "  font-weight: bold; "
+        "  font-size: 10pt; "
+        "  color: #DDD; "
+        "}"
+        "QPushButton:hover { background-color: #5A5A5A; }"
+        "QPushButton:pressed { background-color: #9C27B0; color: white; }"
+        "QPushButton:disabled { background-color: #2A2A2A; color: #555; }";
+
+    // Row 0: M1, M2, M3, M4
+    // Row 1: M5, M6, M7, M8
+    for (int i = 0; i < 8; i++) {
+        QPushButton* btn = new QPushButton(QString("M%1").arg(i + 1), voiceGroup);
+        btn->setAutoDefault(false);
+        btn->setDefault(false);
+        btn->setFixedHeight(BUTTON_HEIGHT);
+        btn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        btn->setStyleSheet(voiceButtonStyle);
+        btn->setToolTip(QString("Play voice memory %1").arg(i + 1));
+        btn->setProperty("memoryNumber", i + 1);
+        btn->setEnabled(false);  // Disabled until connected
+        m_voiceButtons[i] = btn;
+        connect(btn, &QPushButton::clicked, this, &MainWindow::onVoiceMemoryClicked);
+
+        int row = (i < 4) ? 0 : 1;
+        int col = (i < 4) ? i : (i - 4);
+        voiceLayout->addWidget(btn, row, col);
+    }
+
+    mainLayout->addWidget(voiceGroup, 1);  // stretch = 1 (expands)
+
+    return container;
+}
+
 void MainWindow::connectSignals()
 {
-    // Tools section - record button and radio control (now in RadioControlPanel)
+    // Tools section - record button
     connect(m_radioControlPanel, &RadioControlPanel::recordClicked,
             this, &MainWindow::onRecordClicked);
-    connect(m_radioControlPanel, &RadioControlPanel::radioControlClicked,
-            this, &MainWindow::onShowRadioControl);
 
     // Delay and sync controls
     connect(m_delaySlider, &QSlider::valueChanged, this, &MainWindow::onDelayChanged);
@@ -463,6 +708,16 @@ void MainWindow::applySettingsToUI()
     if (!m_settings.serial().portName.isEmpty()) {
         m_radioControlPanel->setSelectedPort(m_settings.serial().portName);
     }
+    m_radioControlPanel->setDialStepIndex(m_settings.serial().dialStepIndex);
+
+    // Apply voice memory labels to buttons
+    m_voiceMemoryLabels = m_settings.voiceMemoryLabels();
+    for (int i = 0; i < 8; i++) {
+        QString label = (i < m_voiceMemoryLabels.size() && !m_voiceMemoryLabels[i].isEmpty())
+                        ? m_voiceMemoryLabels[i]
+                        : QString("Memory %1").arg(i + 1);
+        m_voiceButtons[i]->setToolTip(label);
+    }
 
     // Apply WebSDR settings - update site list from loaded settings
     // This is important because setupUI() ran before load() with default sites
@@ -477,7 +732,7 @@ void MainWindow::applySettingsToUI()
 
         if (!showBrowser) {
             // Start in compact mode - same height as toggle function
-            static constexpr int COMPACT_HEIGHT = 413;
+            static constexpr int COMPACT_HEIGHT = 563;
             m_browserGroup->hide();
             setMinimumSize(1200, COMPACT_HEIGHT);
             resize(width(), COMPACT_HEIGHT);
@@ -514,6 +769,7 @@ void MainWindow::saveSettings()
 
     // Save serial settings
     m_settings.serial().portName = m_radioControlPanel->selectedPort();
+    m_settings.serial().dialStepIndex = m_radioControlPanel->dialStepIndex();
 
     // Save WebSDR settings
     WebSdrSite site = m_radioControlPanel->selectedSite();
@@ -797,11 +1053,6 @@ void MainWindow::updateMeters()
         radioSMeterLevel = -80.0f;  // S0 / "No Signal" when not connected
     }
     m_radioSMeter->setLevel(radioSMeterLevel);
-
-    // Also update RadioControlWindow S-meter with same delayed value
-    if (m_radioControlWindow && m_radioControlWindow->isVisible()) {
-        m_radioControlWindow->updateSMeter(radioSMeterLevel);
-    }
 
     // WebSDR S-Meter: Use page's S-meter data if available, otherwise audio level.
     // Apply 200ms delay to compensate for browser audio buffering.
@@ -1183,17 +1434,27 @@ void MainWindow::onSerialConnectClicked()
             m_radioControlPanel, &RadioControlPanel::setRadioModel);
     connect(m_radioController, &RadioController::txStatusChanged,
             this, &MainWindow::onTxStatusChanged);
+    connect(m_radioController, &RadioController::tunerStateChanged,
+            this, &MainWindow::onTunerStateChanged);
+
+    // Enable radio controls (Band/Mode/Tuner/Voice buttons)
+    setRadioControlsEnabled(true);
 
     // Update display with initial values from detection
     // (The signals were consumed by detection lambda, so we need to manually update)
     if (m_radioController->currentFrequency() > 0) {
-        m_radioControlPanel->setFrequencyDisplay(m_radioController->currentFrequency());
+        m_localFrequency = m_radioController->currentFrequency();
+        m_radioControlPanel->setFrequencyDisplay(m_localFrequency);
+        // Update band button selection
+        updateBandSelection(m_localFrequency);
         // Also set the frequency in WebSDR manager so it's ready when site loads
-        m_webSdrManager->setFrequency(m_radioController->currentFrequency());
+        m_webSdrManager->setFrequency(m_localFrequency);
     }
     if (!m_radioController->currentModeName().isEmpty() &&
         m_radioController->currentModeName() != "---") {
         m_radioControlPanel->setModeDisplay(m_radioController->currentModeName());
+        // Update mode button selection
+        updateModeSelection(m_radioController->currentMode());
         // Also set the mode in WebSDR manager
         QString webSdrMode = CIVProtocol::modeToWebSdr(m_radioController->currentMode());
         if (!webSdrMode.isEmpty()) {
@@ -1291,14 +1552,7 @@ void MainWindow::onSerialDisconnectClicked()
         m_webSdrManager->unloadCurrent();
     }
 
-    // Step 5: Clean up RadioControlWindow (it holds a pointer to the old controller)
-    if (m_radioControlWindow) {
-        m_radioControlWindow->close();
-        delete m_radioControlWindow;
-        m_radioControlWindow = nullptr;
-    }
-
-    // Step 6: Disconnect radio and clean up controller
+    // Step 5: Disconnect radio and clean up controller
     if (m_radioController) {
         m_radioController->disconnect();
         delete m_radioController;
@@ -1329,6 +1583,20 @@ void MainWindow::onSerialDisconnectClicked()
     // Reset WebSDR S-meter state
     m_websdrSmeterValid = false;
 
+    // Reset dial state
+    m_dialActive = false;
+    m_localFrequency = 0;
+    m_dialInactiveTimer->stop();
+
+    // Disable radio controls (Band/Mode/Tuner/Voice buttons)
+    setRadioControlsEnabled(false);
+    m_activeVoiceMemory = 0;
+
+    // Reset tuner state
+    m_tunerEnabled = false;
+    m_tunerToggle->setChecked(false);
+    m_tunerToggle->setText("ATU OFF");
+
     qDebug() << "Disconnected and cleaned up";
 }
 
@@ -1351,8 +1619,16 @@ void MainWindow::onRadioConnectionStateChanged(RadioController::ConnectionState 
 
 void MainWindow::onCIVFrequencyChanged(uint64_t frequencyHz)
 {
-    // Update display
-    m_radioControlPanel->setFrequencyDisplay(frequencyHz);
+    // Store the frequency for dial handling
+    m_localFrequency = frequencyHz;
+
+    // Update display - but not if we're actively dialing (prevents jump-back)
+    if (!m_dialActive) {
+        m_radioControlPanel->setFrequencyDisplay(frequencyHz);
+    }
+
+    // Update band button selection
+    updateBandSelection(frequencyHz);
 
     // Broadcast to ALL WebSDR sites (keeps them synced even when muted)
     if (m_webSdrManager) {
@@ -1366,6 +1642,9 @@ void MainWindow::onCIVModeChanged(uint8_t mode, const QString& modeName)
 {
     // Update display
     m_radioControlPanel->setModeDisplay(modeName);
+
+    // Update mode button selection
+    updateModeSelection(mode);
 
     // Broadcast to ALL WebSDR sites
     if (m_webSdrManager) {
@@ -1409,6 +1688,13 @@ void MainWindow::onTxStatusChanged(bool transmitting)
 
     // Update TX indicator in UI
     m_radioControlPanel->setTransmitting(transmitting);
+
+    // Update voice button states (shows red when transmitting)
+    if (!transmitting && m_activeVoiceMemory > 0) {
+        // TX ended - reset active voice memory
+        m_activeVoiceMemory = 0;
+    }
+    updateVoiceButtonStates();
 
     // Mute/unmute master during TX to prevent hearing own voice from WebSDR
     if (transmitting) {
@@ -1574,19 +1860,19 @@ void MainWindow::onToggleWebSdrView(bool checked)
     // Update setting
     m_settings.webSdr().showBrowser = checked;
 
-    // Compact mode height: RadioControlPanel (~60) + Content (~290) + margins (~63) = ~413
-    static constexpr int COMPACT_HEIGHT = 413;
+    // Compact mode height: RadioControlPanel (~60) + Content (~290) + RadioControls (~120) + margins (~93) = ~563
+    static constexpr int COMPACT_HEIGHT = 563;
 
     if (checked) {
         // Show WebSDR browser view (full mode)
         m_browserGroup->show();
-        setMinimumSize(1200, 876);
+        setMinimumSize(1200, 996);
         setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);  // Remove max constraint
 
         // Restore window size if it was shrunk
         QSize currentSize = size();
-        if (currentSize.height() < 876) {
-            resize(currentSize.width(), 876);
+        if (currentSize.height() < 996) {
+            resize(currentSize.width(), 996);
         }
     } else {
         // Hide WebSDR browser view (compact mode)
@@ -1702,51 +1988,367 @@ void MainWindow::onWebSdrSmeterChanged(int value)
     m_websdrSmeterValid = true;
 }
 
-void MainWindow::onShowRadioControl()
+// ========== Band/Mode/Tuner/Voice Control Handlers ==========
+
+void MainWindow::onBandSelected(int bandIndex)
 {
-    // Create window on first use
-    if (!m_radioControlWindow) {
-        m_radioControlWindow = new RadioControlWindow(m_radioController, this);
+    if (!m_radioController || !m_civConnected) return;
+    if (bandIndex < 0 || bandIndex >= BAND_COUNT) return;
 
-        // Set voice memory labels from settings
-        m_radioControlWindow->setVoiceMemoryLabels(m_settings.voiceMemoryLabels());
+    qDebug() << "MainWindow: Band button" << bandIndex << "clicked";
 
-        // Connect signals for live updates if connected
-        if (m_radioController) {
-            connect(m_radioController, &RadioController::frequencyChanged,
-                    m_radioControlWindow, &RadioControlWindow::updateFrequency);
-            connect(m_radioController, &RadioController::modeChanged,
-                    m_radioControlWindow, [this](uint8_t mode, const QString&) {
-                        if (m_radioControlWindow) {
-                            m_radioControlWindow->updateMode(mode);
-                        }
-                    });
-            // Note: S-meter is updated via updateMeters() timer to use delayed value
-            // matching the main GUI S-meter display
-            connect(m_radioController, &RadioController::tunerStateChanged,
-                    m_radioControlWindow, &RadioControlWindow::updateTunerState);
-            connect(m_radioController, &RadioController::txStatusChanged,
-                    m_radioControlWindow, &RadioControlWindow::updateTxStatus);
-            connect(m_radioController, &RadioController::connectionStateChanged,
-                    m_radioControlWindow, [this](RadioController::ConnectionState state) {
-                        if (m_radioControlWindow) {
-                            m_radioControlWindow->updateConnectionState(state == RadioController::Connected);
-                        }
-                    });
+    // Send frequency to change to the target band
+    uint64_t freq = BAND_FREQS[bandIndex];
+    qDebug() << "MainWindow: Setting frequency to" << freq << "Hz for band" << bandIndex;
+    m_radioController->setFrequency(freq);
+
+    // Set mode based on band:
+    // 160m, 80m, 40m, 30m (bands 0, 1, 2, 3) -> LSB
+    // All others (20m, 17m, 15m, 12m, 10m, 6m) -> USB
+    uint8_t mode;
+    if (bandIndex <= 3) {
+        mode = 0x00;  // LSB
+    } else {
+        mode = 0x01;  // USB
+    }
+    m_radioController->setMode(mode);
+
+    // Poll frequency and mode after a delay to get the actual values from radio
+    QTimer::singleShot(200, this, [this]() {
+        if (m_radioController && m_radioController->isConnected()) {
+            m_radioController->requestFrequency();
+            m_radioController->requestMode();
+        }
+    });
+}
+
+void MainWindow::onModeSelected(int modeIndex)
+{
+    if (!m_radioController || !m_civConnected) return;
+    if (modeIndex < 0 || modeIndex >= MODE_COUNT) return;
+
+    uint8_t mode = MODE_CODES[modeIndex];
+    qDebug() << "MainWindow: Mode selected:" << modeIndex << "-> mode" << mode;
+    m_radioController->setMode(mode);
+}
+
+void MainWindow::onTuneClicked()
+{
+    if (!m_radioController || !m_civConnected) return;
+
+    qDebug() << "MainWindow: Starting tune";
+    m_radioController->startTune();
+}
+
+void MainWindow::onTunerToggled()
+{
+    if (!m_radioController || !m_civConnected) return;
+
+    bool enable = m_tunerToggle->isChecked();
+    qDebug() << "MainWindow: Tuner toggle ->" << (enable ? "ON" : "OFF");
+    m_radioController->setTunerState(enable);
+
+    // Update button text immediately (will be confirmed by radio response)
+    m_tunerToggle->setText(enable ? "ATU ON" : "ATU OFF");
+}
+
+void MainWindow::onVoiceMemoryClicked()
+{
+    if (!m_radioController || !m_civConnected) return;
+
+    QPushButton* btn = qobject_cast<QPushButton*>(sender());
+    if (!btn) return;
+
+    int memNum = btn->property("memoryNumber").toInt();
+    if (memNum < 1 || memNum > 8) return;
+
+    // If currently transmitting the same memory, stop it
+    if (m_radioControlPanel->isTransmitting() && m_activeVoiceMemory == memNum) {
+        qDebug() << "MainWindow: Stopping voice memory" << memNum;
+        m_radioController->stopVoiceMemory();
+        m_activeVoiceMemory = 0;
+        updateVoiceButtonStates();
+        return;
+    }
+
+    // If transmitting a different memory, stop first then play new one
+    if (m_radioControlPanel->isTransmitting() && m_activeVoiceMemory > 0) {
+        qDebug() << "MainWindow: Stopping voice memory" << m_activeVoiceMemory << "to play" << memNum;
+        m_radioController->stopVoiceMemory();
+    }
+
+    // Play the requested memory
+    qDebug() << "MainWindow: Playing voice memory" << memNum;
+    m_radioController->playVoiceMemory(memNum);
+    m_activeVoiceMemory = memNum;
+    updateVoiceButtonStates();
+}
+
+void MainWindow::onTunerStateChanged(bool enabled)
+{
+    m_tunerEnabled = enabled;
+    m_tunerToggle->setChecked(enabled);
+    m_tunerToggle->setText(enabled ? "ATU ON" : "ATU OFF");
+}
+
+void MainWindow::updateBandSelection(uint64_t freqHz)
+{
+    int bandIndex = frequencyToBandIndex(freqHz);
+
+    // Block signals to prevent triggering onBandSelected
+    m_bandGroup->blockSignals(true);
+
+    // Uncheck all first
+    for (int i = 0; i < BAND_COUNT; i++) {
+        m_bandButtons[i]->setChecked(false);
+    }
+
+    // Check the matching band
+    if (bandIndex >= 0 && bandIndex < BAND_COUNT) {
+        m_bandButtons[bandIndex]->setChecked(true);
+    }
+
+    m_bandGroup->blockSignals(false);
+}
+
+void MainWindow::updateModeSelection(uint8_t mode)
+{
+    int modeIndex = modeToIndex(mode);
+
+    // Block signals to prevent triggering onModeSelected
+    m_modeGroup->blockSignals(true);
+
+    // Uncheck all first
+    for (int i = 0; i < MODE_COUNT; i++) {
+        m_modeButtons[i]->setChecked(false);
+    }
+
+    // Check the matching mode
+    if (modeIndex >= 0 && modeIndex < MODE_COUNT) {
+        m_modeButtons[modeIndex]->setChecked(true);
+    }
+
+    m_modeGroup->blockSignals(false);
+}
+
+int MainWindow::frequencyToBandIndex(uint64_t freqHz) const
+{
+    // Band ranges in Hz (approximate)
+    struct BandRange {
+        uint64_t low;
+        uint64_t high;
+        int index;
+    };
+
+    static const BandRange ranges[] = {
+        {1800000,  2000000,  0},  // 160m
+        {3500000,  4000000,  1},  // 80m
+        {7000000,  7300000,  2},  // 40m
+        {10100000, 10150000, 3},  // 30m
+        {14000000, 14350000, 4},  // 20m
+        {18068000, 18168000, 5},  // 17m
+        {21000000, 21450000, 6},  // 15m
+        {24890000, 24990000, 7},  // 12m
+        {28000000, 29700000, 8},  // 10m
+        {50000000, 54000000, 9},  // 6m
+    };
+
+    for (const auto& range : ranges) {
+        if (freqHz >= range.low && freqHz <= range.high) {
+            return range.index;
         }
     }
 
-    // Update connection state
-    m_radioControlWindow->updateConnectionState(m_radioController && m_radioController->isConnected());
+    return -1;  // Not in any amateur band
+}
 
-    // Update current values if connected
-    if (m_radioController && m_radioController->isConnected()) {
-        m_radioControlWindow->updateFrequency(m_radioController->currentFrequency());
-        m_radioControlWindow->updateMode(m_radioController->currentMode());
+int MainWindow::modeToIndex(uint8_t mode) const
+{
+    for (int i = 0; i < MODE_COUNT; i++) {
+        if (MODE_CODES[i] == mode) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+void MainWindow::setRadioControlsEnabled(bool enabled)
+{
+    m_tuneButton->setEnabled(enabled);
+    m_tunerToggle->setEnabled(enabled);
+
+    for (int i = 0; i < BAND_COUNT; i++) {
+        m_bandButtons[i]->setEnabled(enabled);
+    }
+    for (int i = 0; i < MODE_COUNT; i++) {
+        m_modeButtons[i]->setEnabled(enabled);
+    }
+    for (int i = 0; i < 8; i++) {
+        m_voiceButtons[i]->setEnabled(enabled);
+    }
+}
+
+void MainWindow::updateVoiceButtonStates()
+{
+    bool isTransmitting = m_radioControlPanel->isTransmitting();
+
+    QString activeStyle =
+        "QPushButton { "
+        "  background-color: #D32F2F; "
+        "  border: 1px solid #F44336; "
+        "  border-radius: 4px; "
+        "  padding: 2px 4px; "
+        "  font-weight: bold; "
+        "  font-size: 10pt; "
+        "  color: white; "
+        "}"
+        "QPushButton:hover { background-color: #E53935; }"
+        "QPushButton:pressed { background-color: #B71C1C; }";
+
+    QString normalStyle =
+        "QPushButton { "
+        "  background-color: #3A3A3A; "
+        "  border: 1px solid #555; "
+        "  border-radius: 4px; "
+        "  padding: 2px 4px; "
+        "  font-weight: bold; "
+        "  font-size: 10pt; "
+        "  color: #DDD; "
+        "}"
+        "QPushButton:hover { background-color: #5A5A5A; }"
+        "QPushButton:pressed { background-color: #9C27B0; color: white; }"
+        "QPushButton:disabled { background-color: #2A2A2A; color: #555; }";
+
+    for (int i = 0; i < 8; i++) {
+        int memNum = i + 1;
+        if (isTransmitting && m_activeVoiceMemory == memNum) {
+            // This button is actively transmitting - show red
+            m_voiceButtons[i]->setStyleSheet(activeStyle);
+        } else {
+            // Normal state
+            m_voiceButtons[i]->setStyleSheet(normalStyle);
+        }
+    }
+}
+
+// ========== USB Jog Wheel / Dial Handling ==========
+
+bool MainWindow::event(QEvent* e)
+{
+    // Intercept key press events before child widgets get them
+    if (e->type() == QEvent::KeyPress) {
+        QKeyEvent* keyEvent = static_cast<QKeyEvent*>(e);
+        int key = keyEvent->key();
+
+        // Handle "+" key to cycle dial step
+        if (key == Qt::Key_Plus || key == Qt::Key_Equal) {
+            m_radioControlPanel->cycleDialStep();
+            return true;
+        }
+
+        // Handle F9/F10 for USB dial
+        // F9 = dial UP = frequency INCREASE
+        // F10 = dial DOWN = frequency DECREASE
+        if (key == Qt::Key_F9) {
+            handleDialInput(+1);
+            return true;
+        }
+        if (key == Qt::Key_F10) {
+            handleDialInput(-1);
+            return true;
+        }
     }
 
-    // Show and bring to front
-    m_radioControlWindow->show();
-    m_radioControlWindow->raise();
-    m_radioControlWindow->activateWindow();
+    return QMainWindow::event(e);
+}
+
+void MainWindow::keyPressEvent(QKeyEvent* event)
+{
+    // Handle "+" key to cycle dial step
+    if (event->key() == Qt::Key_Plus || event->key() == Qt::Key_Equal) {
+        m_radioControlPanel->cycleDialStep();
+        event->accept();
+        return;
+    }
+
+    // Handle frequency tuning keys (requires connection)
+    if (!m_radioController || !m_civConnected) {
+        QMainWindow::keyPressEvent(event);
+        return;
+    }
+
+    switch (event->key()) {
+        // F9/F10 handled by event() - this is fallback
+        case Qt::Key_F9:
+            handleDialInput(+1);
+            event->accept();
+            return;
+
+        case Qt::Key_F10:
+            handleDialInput(-1);
+            event->accept();
+            return;
+
+        // Arrow keys also work for tuning
+        case Qt::Key_Up:
+        case Qt::Key_Right:
+            handleDialInput(+1);
+            event->accept();
+            return;
+
+        case Qt::Key_Down:
+        case Qt::Key_Left:
+            handleDialInput(-1);
+            event->accept();
+            return;
+
+        default:
+            break;
+    }
+
+    QMainWindow::keyPressEvent(event);
+}
+
+void MainWindow::handleDialInput(int direction)
+{
+    // direction: +1 = frequency up, -1 = frequency down
+    if (!m_radioController || !m_civConnected) return;
+
+    int dialStep = m_radioControlPanel->currentDialStep();
+
+    // Use local frequency if available, otherwise get from radio
+    int64_t currentFreq = static_cast<int64_t>(m_localFrequency);
+    if (currentFreq == 0 && m_radioController) {
+        currentFreq = static_cast<int64_t>(m_radioController->currentFrequency());
+    }
+
+    int64_t newFreq = currentFreq + (direction * dialStep);
+
+    // Clamp to valid range
+    if (newFreq < 100000) newFreq = 100000;
+    if (newFreq > 60000000) newFreq = 60000000;
+
+    // Update local frequency and display immediately for instant visual feedback
+    m_localFrequency = static_cast<uint64_t>(newFreq);
+    m_radioControlPanel->setFrequencyDisplay(m_localFrequency);
+
+    // Mark dial as active - this suppresses incoming frequency updates from radio
+    // to prevent the display from jumping back to old values
+    m_dialActive = true;
+    m_dialInactiveTimer->start();  // Reset the 500ms inactivity timeout
+
+    // Rate-limit commands to the radio: max ~10 per second (100ms between commands)
+    // This prevents overwhelming the serial buffer and causing delayed execution
+    qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (now - m_lastDialCommandTime >= 100) {
+        m_radioController->setFrequency(static_cast<uint64_t>(newFreq));
+        m_lastDialCommandTime = now;
+    }
+}
+
+void MainWindow::onDialInactive()
+{
+    // Dial has been inactive for 500ms - resume accepting frequency updates from radio
+    m_dialActive = false;
+    qDebug() << "MainWindow: Dial inactive, resuming radio feedback";
 }

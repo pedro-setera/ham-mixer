@@ -9,6 +9,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QFont>
+#include <algorithm>
 
 FrequencyLCD::FrequencyLCD(QWidget* parent)
     : QWidget(parent)
@@ -43,12 +44,33 @@ void FrequencyLCD::setDimDigitColor(const QColor& color)
     update();
 }
 
+void FrequencyLCD::setShowUnit(bool show)
+{
+    m_showUnit = show;
+    updateGeometry();
+    update();
+}
+
+void FrequencyLCD::setDisplayHeight(int height)
+{
+    m_displayHeight = std::max(20, height);  // Minimum 20 pixels
+    updateGeometry();
+    update();
+}
+
+void FrequencyLCD::setHighlightDigit(int positionFromRight)
+{
+    m_highlightDigit = positionFromRight;
+    update();
+}
+
 QSize FrequencyLCD::sizeHint() const
 {
-    // 7 digits + 1 decimal point + kHz label + padding
-    // Format: XXXXX.XX kHz
-    int width = PADDING * 2 + 7 * DIGIT_WIDTH + 6 * DIGIT_SPACING + GROUP_SPACING + 40;  // 40 for kHz label
-    int height = PADDING * 2 + DIGIT_HEIGHT;
+    // 7 digits + 1 decimal point + optional kHz label + padding
+    // Format: XXXXX.XX [kHz]
+    int unitWidth = m_showUnit ? 40 : 0;
+    int width = padding() * 2 + 7 * digitWidth() + 6 * digitSpacing() + groupSpacing() + unitWidth;
+    int height = padding() * 2 + digitHeight();
     return QSize(width, height);
 }
 
@@ -64,10 +86,18 @@ void FrequencyLCD::paintEvent(QPaintEvent* event)
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, true);
 
+    // Get scaled dimensions
+    int dHeight = digitHeight();
+    int dWidth = digitWidth();
+    int dSpacing = digitSpacing();
+    int gSpacing = groupSpacing();
+    int dSize = dotSize();
+    int pad = padding();
+
     // Draw background with rounded corners and slight border
     painter.setPen(QPen(QColor(40, 50, 60), 2));
     painter.setBrush(m_backgroundColor);
-    painter.drawRoundedRect(rect().adjusted(1, 1, -1, -1), 8, 8);
+    painter.drawRoundedRect(rect().adjusted(1, 1, -1, -1), 6, 6);
 
     // Add subtle inner shadow/glow effect
     QLinearGradient innerGlow(0, 0, 0, height());
@@ -78,9 +108,8 @@ void FrequencyLCD::paintEvent(QPaintEvent* event)
     painter.fillRect(rect().adjusted(3, 3, -3, -3), innerGlow);
 
     // Convert Hz to kHz with 2 decimal places
-    // Format: XXXXX.XX kHz (e.g., 14205.67 kHz)
+    // Format: XXXXX.XX [kHz] (e.g., 14205.67 kHz)
     // We need 7 digits total: 5 before decimal, 2 after
-    // frequencyHz / 10 gives us the value in units of 10 Hz (0.01 kHz)
     uint64_t freqIn10Hz = m_frequencyHz / 10;  // Now in units of 0.01 kHz
     int digits[7];
 
@@ -91,14 +120,15 @@ void FrequencyLCD::paintEvent(QPaintEvent* event)
     }
 
     // Calculate starting X position (center the display)
-    int totalWidth = 7 * DIGIT_WIDTH + 6 * DIGIT_SPACING + GROUP_SPACING + DOT_SIZE;
-    int startX = (width() - totalWidth - 35) / 2;  // 35 for kHz label
-    int y = (height() - DIGIT_HEIGHT) / 2;
+    int unitWidth = m_showUnit ? (dHeight * 35 / 48) : 0;  // Scale unit label width
+    int totalWidth = 7 * dWidth + 6 * dSpacing + gSpacing + dSize;
+    int startX = (width() - totalWidth - unitWidth) / 2;
+    int y = (height() - dHeight) / 2;
 
     int x = startX;
 
     // Draw all 7 digits with decimal after position 4 (indices 0-4 before, 5-6 after)
-    // Format: XXXXX.XX kHz
+    // Format: XXXXX.XX [kHz]
     // Skip leading zeros before the decimal point (positions 0-4)
     // Always show digits after decimal point (positions 5-6)
     bool foundNonZero = false;
@@ -117,29 +147,40 @@ void FrequencyLCD::paintEvent(QPaintEvent* event)
             foundNonZero = true;  // Force showing the units digit
         }
 
+        // Calculate which digit position from right this is (for highlighting)
+        // Position 6 (i=6) = rightmost = position 0 from right
+        // Position 5 (i=5) = position 1 from right
+        // Position 4 (i=4, before decimal) = position 3 from right (skip decimal)
+        // Position 3 (i=3) = position 4 from right
+        // etc.
+        int posFromRight = (i >= 5) ? (6 - i) : (6 - i + 1);  // Account for decimal point
+        bool isHighlighted = (m_highlightDigit >= 0 && posFromRight == m_highlightDigit);
+
         // First draw dim "8" as background (all segments dim)
-        drawDigit(painter, x, y, 8, DIGIT_HEIGHT, true);
+        drawDigit(painter, x, y, 8, dHeight, true);
 
         // Then draw actual digit on top (skip if leading zero)
         if (!isLeadingZero) {
-            drawDigit(painter, x, y, digits[i], DIGIT_HEIGHT, false);
+            drawDigit(painter, x, y, digits[i], dHeight, false, isHighlighted);
         }
 
-        x += DIGIT_WIDTH + DIGIT_SPACING;
+        x += dWidth + dSpacing;
 
         // Add decimal point after position 4 (before the last 2 digits)
         if (i == 4) {
-            x += GROUP_SPACING / 2;
-            drawDecimalPoint(painter, x, y + DIGIT_HEIGHT - DOT_SIZE - 2, DIGIT_HEIGHT);
-            x += DOT_SIZE + GROUP_SPACING / 2;
+            x += gSpacing / 2;
+            drawDecimalPoint(painter, x, y + dHeight - dSize - 2, dHeight);
+            x += dSize + gSpacing / 2;
         }
     }
 
-    // Draw kHz label
-    drawMHzLabel(painter, x + 8, y);
+    // Draw kHz label (optional)
+    if (m_showUnit) {
+        drawMHzLabel(painter, x + 4, y);
+    }
 }
 
-void FrequencyLCD::drawDigit(QPainter& painter, int x, int y, int digit, int height, bool dim)
+void FrequencyLCD::drawDigit(QPainter& painter, int x, int y, int digit, int height, bool dim, bool highlighted)
 {
     if (digit < 0 || digit > 9) return;
 
@@ -150,14 +191,14 @@ void FrequencyLCD::drawDigit(QPainter& painter, int x, int y, int digit, int hei
         bool lit = (pattern >> seg) & 1;
         if (dim) {
             // For dim mode, draw all segments as dim
-            drawSegment(painter, x, y, seg, height, false);
+            drawSegment(painter, x, y, seg, height, false, false);
         } else if (lit) {
-            drawSegment(painter, x, y, seg, height, true);
+            drawSegment(painter, x, y, seg, height, true, highlighted);
         }
     }
 }
 
-void FrequencyLCD::drawSegment(QPainter& painter, int x, int y, int segment, int height, bool lit)
+void FrequencyLCD::drawSegment(QPainter& painter, int x, int y, int segment, int height, bool lit, bool highlighted)
 {
     // Segment positions for a 7-segment display:
     //     aaa      (segment 0)
@@ -166,12 +207,20 @@ void FrequencyLCD::drawSegment(QPainter& painter, int x, int y, int segment, int
     //    e   c     (segments 4, 2)
     //     ddd      (segment 3)
 
-    int w = DIGIT_WIDTH;
+    int w = digitWidth();
     int h = height;
-    int t = SEGMENT_THICKNESS;
-    int gap = 2;  // Small gap between segments
+    int t = segmentThickness();
+    int gap = std::max(1, t / 3);  // Small gap between segments, scaled
 
-    QColor color = lit ? m_digitColor : m_dimDigitColor;
+    // Choose color: highlighted yellow, normal green, or dim
+    QColor color;
+    if (!lit) {
+        color = m_dimDigitColor;
+    } else if (highlighted) {
+        color = m_highlightColor;  // Yellow for highlighted digit
+    } else {
+        color = m_digitColor;
+    }
     painter.setPen(Qt::NoPen);
     painter.setBrush(color);
 
@@ -246,7 +295,8 @@ void FrequencyLCD::drawSegment(QPainter& painter, int x, int y, int segment, int
     // Add glow effect for lit segments
     if (lit) {
         painter.setOpacity(0.3);
-        painter.setBrush(m_digitColor.lighter(150));
+        QColor glowColor = highlighted ? m_highlightColor.lighter(150) : m_digitColor.lighter(150);
+        painter.setBrush(glowColor);
         painter.drawPath(path);
         painter.setOpacity(1.0);
     }
@@ -256,29 +306,32 @@ void FrequencyLCD::drawDecimalPoint(QPainter& painter, int x, int y, int height,
 {
     Q_UNUSED(height)
 
+    int dSize = dotSize();
     QColor color = lit ? m_digitColor : m_dimDigitColor;
     painter.setPen(Qt::NoPen);
     painter.setBrush(color);
-    painter.drawEllipse(x, y, DOT_SIZE, DOT_SIZE);
+    painter.drawEllipse(x, y, dSize, dSize);
 
     // Add glow for lit dot
     if (lit) {
         painter.setOpacity(0.3);
         painter.setBrush(m_digitColor.lighter(150));
-        painter.drawEllipse(x - 1, y - 1, DOT_SIZE + 2, DOT_SIZE + 2);
+        painter.drawEllipse(x - 1, y - 1, dSize + 2, dSize + 2);
         painter.setOpacity(1.0);
     }
 }
 
 void FrequencyLCD::drawMHzLabel(QPainter& painter, int x, int y)
 {
-    QFont font("Segoe UI", 12, QFont::Bold);
+    // Scale font size based on display height
+    int fontSize = std::max(8, m_displayHeight * 12 / 48);
+    QFont font("Segoe UI", fontSize, QFont::Bold);
     painter.setFont(font);
     painter.setPen(m_digitColor);
 
     // Center vertically
     QFontMetrics fm(font);
-    int textY = y + (DIGIT_HEIGHT + fm.ascent()) / 2 - 2;
+    int textY = y + (digitHeight() + fm.ascent()) / 2 - 2;
 
     painter.drawText(x, textY, "kHz");
 }
