@@ -52,7 +52,7 @@ Comprehensive transceiver controls integrated directly into the main window for 
 - **Variable Step Sizes** - 50Hz, 100Hz, 1kHz, 10kHz, 100kHz tuning steps
 - **TX Indicator** - Real-time TX/RX LED with active voice memory highlighting
 
-### SDR Receiver Support
+### Web SDR Receiver Support
 - **WebSDR 2.x** - Standard WebSDR sites (PA3FWM software)
 - **KiwiSDR** - KiwiSDR receivers with real-time frequency control
 - **Multiple sites** - Switch between receivers worldwide
