@@ -162,6 +162,7 @@ private:
 
     // WebSDR browser view
     QGroupBox* m_browserGroup;
+    QPoint m_preExpandPos;  // Window position before full-screen expand
 
     // Band/Mode/Tuner/Voice controls
     QButtonGroup* m_bandGroup;

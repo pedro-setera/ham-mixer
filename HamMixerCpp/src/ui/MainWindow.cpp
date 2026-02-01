@@ -24,6 +24,7 @@
 #include <QFileDialog>
 #include <QDir>
 #include <QGridLayout>
+#include <QScreen>
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -112,7 +113,7 @@ void MainWindow::setupWindow()
 {
     setWindowTitle(QString("%1 v%2 (%3)").arg(HAMMIXER_APP_NAME).arg(HAMMIXER_VERSION_STRING).arg(HAMMIXER_VERSION_DATE));
     setWindowIcon(QIcon(":/icons/icons/antenna.png"));
-    setMinimumSize(1200, 896);  // Reduced WebSDR browser by 100px
+    setMinimumSize(1200, 916);  // Full view with WebSDR browser
     resize(m_settings.window().size.width(), m_settings.window().size.height());
     move(m_settings.window().position);
 
@@ -290,23 +291,22 @@ void MainWindow::setupUI()
 
     // ========== Embedded WebSDR Browser (bottom section) ==========
     m_browserGroup = new QGroupBox("WebSDR Browser", this);
-    m_browserGroup->setFixedHeight(350);  // Reduced by 100px
+    m_browserGroup->setMinimumHeight(350);  // Minimum height, can expand
+    m_browserGroup->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);  // Allow vertical expansion
     m_browserGroup->setContentsMargins(0, 0, 0, 0);  // Remove group box margins
     QVBoxLayout* browserLayout = new QVBoxLayout(m_browserGroup);
     browserLayout->setContentsMargins(5, 0, 5, 5);  // Reduced top margin to avoid double spacing
 
     // Create a container widget for the browser with its own layout
     QWidget* browserContainer = new QWidget(m_browserGroup);
-    browserContainer->setMinimumHeight(260);  // Reduced by 100px
+    browserContainer->setMinimumHeight(260);  // Minimum height
+    browserContainer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);  // Allow expansion
     QVBoxLayout* containerLayout = new QVBoxLayout(browserContainer);
     containerLayout->setContentsMargins(0, 0, 0, 0);
     containerLayout->setSpacing(0);
-    browserLayout->addWidget(browserContainer);
+    browserLayout->addWidget(browserContainer, 1);  // Stretch factor 1
 
-    mainLayout->addWidget(m_browserGroup);
-
-    // Add stretch at the end to prevent other widgets from expanding when browser is hidden
-    mainLayout->addStretch();
+    mainLayout->addWidget(m_browserGroup, 1);  // Stretch factor 1 - expands to fill space
 
     // Create WebSDR manager with the browser container for embedded mode
     m_webSdrManager = new WebSdrManager(browserContainer, this);
@@ -1863,16 +1863,36 @@ void MainWindow::onToggleWebSdrView(bool checked)
     // Compact mode height: RadioControlPanel (~60) + Content (~290) + RadioControls (~120) + margins (~93) = ~563
     static constexpr int COMPACT_HEIGHT = 563;
 
+    // Minimum full view height (used as minimum constraint)
+    static constexpr int MIN_FULL_HEIGHT = 916;
+
     if (checked) {
-        // Show WebSDR browser view (full mode)
+        // Show WebSDR browser view (full mode) - expand to fill monitor height
         m_browserGroup->show();
-        setMinimumSize(1200, 996);
+        setMinimumSize(1200, MIN_FULL_HEIGHT);
         setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);  // Remove max constraint
 
-        // Restore window size if it was shrunk
-        QSize currentSize = size();
-        if (currentSize.height() < 996) {
-            resize(currentSize.width(), 996);
+        // Get available screen geometry (excludes taskbar) for the monitor where window is located
+        QScreen* currentScreen = screen();
+        if (currentScreen) {
+            QRect available = currentScreen->availableGeometry();
+
+            // Store current position before expanding
+            m_preExpandPos = pos();
+
+            // Calculate window frame height (title bar + borders)
+            // frameGeometry includes decorations, geometry/height is client area only
+            int frameHeight = frameGeometry().height() - height();
+
+            // Calculate target: available height minus frame, position at top of screen
+            int targetHeight = available.height() - frameHeight;
+            int targetY = available.top();
+
+            // Move to top of screen and expand to fill available height (accounting for frame)
+            move(x(), targetY);
+            resize(width(), targetHeight);
+
+            qDebug() << "WebSDR view expanded to fill screen:" << targetHeight << "px (frame:" << frameHeight << "px) on" << currentScreen->name();
         }
     } else {
         // Hide WebSDR browser view (compact mode)
@@ -1880,17 +1900,19 @@ void MainWindow::onToggleWebSdrView(bool checked)
         setMinimumSize(1200, COMPACT_HEIGHT);
         setMaximumSize(QWIDGETSIZE_MAX, COMPACT_HEIGHT);  // Temporarily constrain max height
 
-        // Force resize to compact height
+        // Restore to compact height, keep X position but restore Y if we have a saved position
+        int targetY = m_preExpandPos.isNull() ? y() : m_preExpandPos.y();
+        move(x(), targetY);
         resize(width(), COMPACT_HEIGHT);
 
         // Remove max height constraint after resize (allow some flexibility)
         setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
+
+        qDebug() << "WebSDR view collapsed to compact mode";
     }
 
     // Mark settings as dirty so the view preference is saved
     m_settings.markDirty();
-
-    qDebug() << "WebSDR view toggled:" << (checked ? "shown" : "hidden");
 }
 
 float MainWindow::getDelayedSMeterValue() const

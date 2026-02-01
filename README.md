@@ -58,7 +58,7 @@ Comprehensive transceiver controls integrated directly into the main window for 
 - **Multiple sites** - Switch between receivers worldwide
 - **Automatic band selection** - SDR changes bands with your radio
 - **Embedded browser** - SDR waterfall displayed within the main application
-- **Compact/Full view** - Hide WebSDR browser for minimal interface (Tools > Show WebSDR View)
+- **Compact/Full view** - Toggle WebSDR browser visibility; full view auto-expands to fill monitor height (multi-monitor aware)
 - **S-Meter extraction** - Real-time signal level from SDR
 
 ### Time Synchronization
