@@ -123,7 +123,7 @@ private:
 
     // Dial step handling
     int m_dialStepIndex = 1;  // Index into DIAL_STEPS array (default 100 Hz)
-    static constexpr int DIAL_STEPS[] = {10, 100, 1000, 10000, 100000};
+    static constexpr int DIAL_STEPS[] = {50, 100, 1000, 10000, 100000};
     static constexpr int DIAL_STEP_COUNT = 5;
 
 public:

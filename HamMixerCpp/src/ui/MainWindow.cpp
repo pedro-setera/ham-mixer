@@ -2218,20 +2218,20 @@ void MainWindow::setRadioControlsEnabled(bool enabled)
 
 void MainWindow::updateVoiceButtonStates()
 {
-    bool isTransmitting = m_radioControlPanel->isTransmitting();
-
+    // Active style: purple color to indicate this voice memory is playing/pending
+    // Stays active from click until TX ends
     QString activeStyle =
         "QPushButton { "
-        "  background-color: #D32F2F; "
-        "  border: 1px solid #F44336; "
+        "  background-color: #9C27B0; "
+        "  border: 1px solid #AB47BC; "
         "  border-radius: 4px; "
         "  padding: 2px 4px; "
         "  font-weight: bold; "
         "  font-size: 10pt; "
         "  color: white; "
         "}"
-        "QPushButton:hover { background-color: #E53935; }"
-        "QPushButton:pressed { background-color: #B71C1C; }";
+        "QPushButton:hover { background-color: #AB47BC; }"
+        "QPushButton:pressed { background-color: #7B1FA2; }";
 
     QString normalStyle =
         "QPushButton { "
@@ -2248,9 +2248,11 @@ void MainWindow::updateVoiceButtonStates()
         "QPushButton:disabled { background-color: #2A2A2A; color: #555; }";
 
     for (int i = 0; i < 8; i++) {
+        if (!m_voiceButtons[i]) continue;
+
         int memNum = i + 1;
-        if (isTransmitting && m_activeVoiceMemory == memNum) {
-            // This button is actively transmitting - show red
+        if (m_activeVoiceMemory == memNum) {
+            // This button is active (playing or pending TX) - show purple
             m_voiceButtons[i]->setStyleSheet(activeStyle);
         } else {
             // Normal state
