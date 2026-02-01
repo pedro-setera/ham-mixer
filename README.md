@@ -49,7 +49,7 @@ Comprehensive transceiver controls integrated directly into the main window for 
 - **Antenna Tuner Control** - TUNE button and ATU ON/OFF toggle
 - **Voice Memory Playback** - M1-M8 buttons for voice keyer with TX stop on re-click
 - **USB Dial/Jog Wheel Support** - Use external USB dial via PowerToys key mapping (F9=up, F10=down, +=cycle step)
-- **Variable Step Sizes** - 10Hz, 100Hz, 1kHz, 10kHz, 100kHz tuning steps
+- **Variable Step Sizes** - 50Hz, 100Hz, 1kHz, 10kHz, 100kHz tuning steps
 - **TX Indicator** - Real-time TX/RX LED with active voice memory highlighting
 
 ### SDR Receiver Support
@@ -74,7 +74,7 @@ Comprehensive transceiver controls integrated directly into the main window for 
   - **Symmetric Lag Detection** - Equal sensitivity for positive/negative delays
 - **Auto/Manual sync modes**:
   - **Manual mode** - Click "Sync" button to align audio streams once
-  - **Auto mode** - Enable "Auto" checkbox for continuous periodic sync every 15 seconds
+  - **Auto mode** - Enable "Auto" checkbox for continuous periodic sync every 5 seconds
   - **Safety threshold** - Auto corrections only applied if within 200ms of current delay (prevents large jumps)
 - **CW pitch-independent** - Works with any CW sidetone pitch from 400 Hz to 1000 Hz
 - **Manual delay control** - 0-2000ms adjustable delay for distant SDR sites
@@ -264,7 +264,8 @@ build.bat
 
 ### 6. Synchronize Audio
 - Click **Sync** to automatically detect and compensate for delay
-- Enable **Auto** checkbox for continuous sync every 15 seconds
+- Enable **Auto** checkbox for continuous sync every 5 seconds
+- Delay value shows **orange** until synced, turns **green** after successful sync
 - Or manually adjust the delay slider until audio aligns
 - Range: 0-2000ms (supports distant KiwiSDR sites like Australia/New Zealand)
 
@@ -307,7 +308,8 @@ build.bat
 
 ### Audio out of sync
 - Click **Sync** button during transmission (works for both voice and CW)
-- Enable **Auto** checkbox for continuous automatic sync every 15 seconds
+- Enable **Auto** checkbox for continuous automatic sync every 5 seconds
+- Delay value displays **orange** when not synced, **green** after successful sync
 - For CW: any sidetone pitch from 400-1000 Hz is supported automatically
 - Manually adjust delay slider if auto-sync fails
 - Typical internet delay: 200-500ms for WebSDR, 1000-1500ms for distant KiwiSDR

@@ -162,7 +162,7 @@ void RadioControlPanel::setupUI()
 
     // ===== Tools Section (fixed width) =====
     QGroupBox* toolsGroup = new QGroupBox("Tools", this);
-    toolsGroup->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
+    toolsGroup->setFixedWidth(200);  // Fixed width to prevent layout shift when REC indicator appears
     QHBoxLayout* toolsLayout = new QHBoxLayout(toolsGroup);
     toolsLayout->setContentsMargins(10, 5, 10, 5);
     toolsLayout->setSpacing(8);
@@ -492,7 +492,7 @@ void RadioControlPanel::setDialStepIndex(int index)
 
 void RadioControlPanel::cycleDialStep()
 {
-    // Cycle through step sizes: 10Hz -> 100Hz -> 1kHz -> 10kHz -> 100kHz -> 10Hz...
+    // Cycle through step sizes: 50Hz -> 100Hz -> 1kHz -> 10kHz -> 100kHz -> 50Hz...
     m_dialStepIndex = (m_dialStepIndex + 1) % DIAL_STEP_COUNT;
     updateHighlightDigit();
 }
@@ -500,9 +500,9 @@ void RadioControlPanel::cycleDialStep()
 void RadioControlPanel::updateHighlightDigit()
 {
     // Update which digit is highlighted in the frequency LCD based on step size
-    // Step sizes: 10, 100, 1000, 10000, 100000 Hz
+    // Step sizes: 50, 100, 1000, 10000, 100000 Hz
     // In kHz format "XXXXX.XX":
-    //   10 Hz = position from right 0 (last digit after decimal)
+    //   50 Hz = position from right 0 (last digit after decimal)
     //   100 Hz = position from right 1 (first digit after decimal)
     //   1 kHz = position from right 3 (last digit before decimal, skip the dot)
     //   10 kHz = position from right 4
@@ -511,7 +511,7 @@ void RadioControlPanel::updateHighlightDigit()
     int highlightPos = -1;
 
     switch (stepHz) {
-        case 10:     highlightPos = 0; break;
+        case 50:     highlightPos = 0; break;  // 50Hz affects the 10Hz digit
         case 100:    highlightPos = 1; break;
         case 1000:   highlightPos = 3; break;  // Skip decimal point
         case 10000:  highlightPos = 4; break;

@@ -174,6 +174,9 @@ QString KiwiSdrController::buildKiwiSdrUrl(const WebSdrSite& site) const
     loadUrl += loadUrl.contains('?') ? "&" : "?";
     loadUrl += "abuf=0.5";
 
+    // Set volume to maximum via URL parameter (0-100 scale)
+    loadUrl += "&vol=100";
+
     // Add password if provided
     if (!site.password.isEmpty()) {
         loadUrl += QString("&p=%1").arg(site.password);

@@ -151,7 +151,7 @@ private:
     QTimer* m_countdownTimer;
     int m_countdownSeconds = 0;
     bool m_isAutoTriggeredSync = false;
-    static constexpr int AUTO_SYNC_INTERVAL_SEC = 15;        // 15 seconds between auto-syncs
+    static constexpr int AUTO_SYNC_INTERVAL_SEC = 5;         // 5 seconds between auto-syncs
     static constexpr float AUTO_SYNC_THRESHOLD_MS = 200.0f;  // Max allowed delta from current delay
 
     // Timers
@@ -230,6 +230,7 @@ private:
     int frequencyToBandIndex(uint64_t freqHz) const;
     int modeToIndex(uint8_t mode) const;
     void setRadioControlsEnabled(bool enabled);
+    void setDelayLabelSyncStatus(bool synced);  // Green if synced, orange if not
     void updateVoiceButtonStates();
 
     void setupWindow();

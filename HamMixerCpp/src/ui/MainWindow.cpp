@@ -221,7 +221,7 @@ void MainWindow::setupUI()
     m_delayLabel->setFixedWidth(70);
     m_delayLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     m_delayLabel->setStyleSheet(
-        "QLabel { font-family: 'Consolas'; font-size: 11pt; font-weight: bold; color: #00BCD4; }");
+        "QLabel { font-family: 'Consolas'; font-size: 11pt; font-weight: bold; color: #fa0; }");  // Orange - not synced yet
     delayTopRow->addWidget(m_delayLabel);
 
     delayMainLayout->addLayout(delayTopRow);
@@ -692,6 +692,9 @@ void MainWindow::applySettingsToUI()
     // Apply current m_settings to UI widgets (without reloading from file)
     m_delaySlider->setValue(m_settings.channel1().delayMs);
 
+    // Set delay label to orange (not synced) since this is loaded from config
+    setDelayLabelSyncStatus(false);
+
     // Block signals when restoring toggle state to prevent starting timers
     // Auto-sync will only actually start when user connects and toggle is checked
     m_autoSyncToggle->blockSignals(true);
@@ -1113,10 +1116,12 @@ void MainWindow::checkSyncResult()
                 // Apply silently (no message box for auto sync)
                 if (newDelayMs >= 0) {
                     m_delaySlider->setValue(newDelayMs);
+                    setDelayLabelSyncStatus(true);  // Green - sync successful
                     qDebug() << "Auto-Sync: Applied delay =" << newDelayMs
                              << "ms (delta:" << delta << "ms, confidence:" << result.confidence * 100 << "%)";
                 } else {
                     m_delaySlider->setValue(0);
+                    setDelayLabelSyncStatus(true);  // Green - sync successful
                     qDebug() << "Auto-Sync: WebSDR ahead, set delay to 0";
                 }
                 return;
@@ -1126,6 +1131,7 @@ void MainWindow::checkSyncResult()
             if (newDelayMs >= 0) {
                 // Normal case: WebSDR is behind Radio, add delay to Radio channel
                 m_delaySlider->setValue(newDelayMs);
+                setDelayLabelSyncStatus(true);  // Green - sync successful
 
                 QMessageBox::information(this, "Sync Complete",
                     QString("Detected delay: %1 ms\nConfidence: %2%\n\n"
@@ -1136,6 +1142,7 @@ void MainWindow::checkSyncResult()
                 // Unusual case: WebSDR is ahead of Radio
                 // We can only delay Radio, not advance it, so set to 0
                 m_delaySlider->setValue(0);
+                setDelayLabelSyncStatus(true);  // Green - sync successful
 
                 QMessageBox::information(this, "Sync Complete",
                     QString("Detected offset: %1 ms (WebSDR ahead)\nConfidence: %2%\n\n"
@@ -1146,6 +1153,8 @@ void MainWindow::checkSyncResult()
             }
         } else {
             // Sync failed
+            setDelayLabelSyncStatus(false);  // Orange - sync failed
+
             if (wasAutoTriggered) {
                 // Silent failure for auto sync
                 qDebug() << "Auto-Sync: Failed, confidence =" << result.confidence * 100 << "%";
@@ -2213,6 +2222,18 @@ void MainWindow::setRadioControlsEnabled(bool enabled)
     }
     for (int i = 0; i < 8; i++) {
         m_voiceButtons[i]->setEnabled(enabled);
+    }
+}
+
+void MainWindow::setDelayLabelSyncStatus(bool synced)
+{
+    // Green (#8f8) when sync was successful, orange (#fa0) when not synced yet or sync failed
+    if (synced) {
+        m_delayLabel->setStyleSheet(
+            "QLabel { font-family: 'Consolas'; font-size: 11pt; font-weight: bold; color: #8f8; }");
+    } else {
+        m_delayLabel->setStyleSheet(
+            "QLabel { font-family: 'Consolas'; font-size: 11pt; font-weight: bold; color: #fa0; }");
     }
 }
 

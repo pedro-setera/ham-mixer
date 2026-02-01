@@ -416,21 +416,27 @@ void WebSdrController::initializeWebSdr()
     setState(Ready);
     qDebug() << "WebSdrController: Starting initialization sequence...";
 
-    // Step 1: Set audio volume and unmute
+    // Step 1: Set audio volume to maximum and unmute
+    // WebSDR uses dB scale: slider range -20 to 6, volume = Math.pow(10, slider/10)
+    // Max volume (slider=6): Math.pow(10, 6/10) = 3.981
     QString audioSetupScript =
         "(function() {"
         "  try {"
         "    if (typeof soundapplet !== 'undefined' && soundapplet !== null) {"
-        "      soundapplet.setvolume(1);"
+        "      soundapplet.setvolume(3.981);"
         "      soundapplet.mute(0);"
         "    }"
+        "    // Also set the slider element if present"
+        "    var slider = document.getElementById('volumecontrol2');"
+        "    if (slider) { slider.value = 6; }"
+        "    if (typeof updateSliderVolume === 'function') { updateSliderVolume(); }"
         "  } catch(e) {}"
         "})();";
 
     if (m_webView && m_webView->page()) {
         m_webView->page()->runJavaScript(audioSetupScript);
     }
-    qDebug() << "WebSdrController: Audio settings applied (volume=1, mute=off, squelch=off)";
+    qDebug() << "WebSdrController: Audio settings applied (volume=max, mute=off)";
 
     // Step 2: Wait 150ms then apply FREQUENCY first (this selects the correct band)
     QTimer::singleShot(150, this, [this]() {
@@ -465,14 +471,17 @@ void WebSdrController::initializeWebSdr()
                     if (m_state != Ready) return;
 
                     // Re-confirm volume at maximum and squelch off
+                    // WebSDR uses dB scale: max volume = 3.981 (slider=6)
                     QString confirmScript =
                         "(function() {"
                         "  try {"
                         "    if (typeof soundapplet !== 'undefined' && soundapplet !== null) {"
-                        "      soundapplet.setvolume(1);"
+                        "      soundapplet.setvolume(3.981);"
                         "      soundapplet.mute(0);"
                         "    }"
-                        "    if (typeof setvolume === 'function') { setvolume(1); }"
+                        "    var slider = document.getElementById('volumecontrol2');"
+                        "    if (slider) { slider.value = 6; }"
+                        "    if (typeof updateSliderVolume === 'function') { updateSliderVolume(); }"
                         "    if (typeof setsquelch === 'function') { setsquelch(0); }"
                         "    console.log('HamMixer: Final volume/squelch confirmation');"
                         "  } catch(e) {}"
