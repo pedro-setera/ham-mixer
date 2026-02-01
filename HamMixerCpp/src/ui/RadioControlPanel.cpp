@@ -19,6 +19,7 @@ RadioControlPanel::RadioControlPanel(QWidget* parent)
     , m_recording(false)
     , m_blinkState(false)
     , m_transmitting(false)
+    , m_webSdrViewVisible(true)
     , m_radioInfoGroup(nullptr)
 {
     setupUI();
@@ -63,7 +64,7 @@ void RadioControlPanel::setupUI()
 
     mainLayout->addWidget(serialGroup, 30);
 
-    // ===== WebSDR Site Section (32%) =====
+    // ===== WebSDR Site Section (28%) =====
     QGroupBox* webSdrGroup = new QGroupBox("WebSDR", this);
     QHBoxLayout* webSdrLayout = new QHBoxLayout(webSdrGroup);
     webSdrLayout->setContentsMargins(10, 5, 10, 5);
@@ -72,12 +73,12 @@ void RadioControlPanel::setupUI()
     QLabel* siteLabel = new QLabel("Site:", webSdrGroup);
     m_siteCombo = new QComboBox(webSdrGroup);
     m_siteCombo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    m_siteCombo->setStyleSheet("QComboBox { min-width: 80px; }");
+    m_siteCombo->setStyleSheet("QComboBox { min-width: 46px; }");  // Reduced by 34px for toggle button
     m_siteCombo->setToolTip("Select WebSDR or KiwiSDR site to use");
 
     // Cogwheel button to open site manager
     m_manageButton = new QPushButton(webSdrGroup);
-    m_manageButton->setFixedSize(28, 28);
+    m_manageButton->setFixedSize(26, 26);
     m_manageButton->setToolTip("Manage SDR sites");
     m_manageButton->setStyleSheet(
         "QPushButton { "
@@ -93,11 +94,30 @@ void RadioControlPanel::setupUI()
     );
     m_manageButton->setText(QString::fromUtf8("\u2699"));  // Unicode cogwheel
 
+    // Toggle button to show/hide WebSDR browser view
+    m_toggleViewButton = new QPushButton(webSdrGroup);
+    m_toggleViewButton->setFixedSize(26, 26);
+    m_toggleViewButton->setToolTip("Show/Hide WebSDR browser view");
+    m_toggleViewButton->setStyleSheet(
+        "QPushButton { "
+        "  background-color: #3C3C3C; "
+        "  border: 1px solid #555555; "
+        "  border-radius: 4px; "
+        "  font-size: 12px; "
+        "  padding: 0px; "
+        "  text-align: center; "
+        "}"
+        "QPushButton:hover { background-color: #4A4A4A; }"
+        "QPushButton:pressed { background-color: #2A2A2A; }"
+    );
+    m_toggleViewButton->setText(QString::fromUtf8("\u25C9"));  // Fisheye (visible state)
+
     webSdrLayout->addWidget(siteLabel);
     webSdrLayout->addWidget(m_siteCombo, 1);
     webSdrLayout->addWidget(m_manageButton);
+    webSdrLayout->addWidget(m_toggleViewButton);
 
-    mainLayout->addWidget(webSdrGroup, 28);
+    mainLayout->addWidget(webSdrGroup, 23);  // Reduced from 28% to give space for Radio Control button
 
     // ===== Radio Info Section (25%) =====
     m_radioInfoGroup = new QGroupBox("Radio Info", this);
@@ -162,9 +182,30 @@ void RadioControlPanel::setupUI()
 
     toolsLayout->addWidget(m_recordButton);
     toolsLayout->addWidget(m_recordIndicator);
+    toolsLayout->addSpacing(8);
+
+    // Radio Control button - opens the radio control window
+    m_radioControlButton = new QPushButton(toolsGroup);
+    m_radioControlButton->setFixedSize(26, 26);
+    m_radioControlButton->setToolTip("Open Radio Control window");
+    m_radioControlButton->setStyleSheet(
+        "QPushButton { "
+        "  background-color: #3C3C3C; "
+        "  border: 1px solid #555555; "
+        "  border-radius: 4px; "
+        "  font-size: 14px; "
+        "  padding: 0px; "
+        "  text-align: center; "
+        "}"
+        "QPushButton:hover { background-color: #4A4A4A; }"
+        "QPushButton:pressed { background-color: #2A2A2A; }"
+    );
+    m_radioControlButton->setText(QString::fromUtf8("\U0001F4FB"));  // Radio emoji
+
+    toolsLayout->addWidget(m_radioControlButton);
     toolsLayout->addStretch();
 
-    mainLayout->addWidget(toolsGroup, 17);
+    mainLayout->addWidget(toolsGroup, 22);  // Increased from 17% for Radio Control button
 
     // Blink timer for recording indicator
     m_blinkTimer = new QTimer(this);
@@ -192,8 +233,20 @@ void RadioControlPanel::connectSignals()
     connect(m_recordButton, &QPushButton::clicked,
             this, &RadioControlPanel::recordClicked);
 
+    connect(m_radioControlButton, &QPushButton::clicked,
+            this, &RadioControlPanel::radioControlClicked);
+
     connect(m_manageButton, &QPushButton::clicked,
             this, &RadioControlPanel::manageSitesClicked);
+
+    connect(m_toggleViewButton, &QPushButton::clicked, this, [this]() {
+        m_webSdrViewVisible = !m_webSdrViewVisible;
+        // Update icon: fisheye for visible, circle for hidden
+        m_toggleViewButton->setText(m_webSdrViewVisible ?
+            QString::fromUtf8("\u25C9") :   // Fisheye (visible)
+            QString::fromUtf8("\u25CE"));   // Bullseye (hidden)
+        emit webSdrViewToggled(m_webSdrViewVisible);
+    });
 }
 
 void RadioControlPanel::onConnectButtonClicked()
@@ -260,6 +313,15 @@ void RadioControlPanel::setTransmitting(bool transmitting)
             "border-radius: 6px;"
         );
     }
+}
+
+void RadioControlPanel::setWebSdrViewVisible(bool visible)
+{
+    m_webSdrViewVisible = visible;
+    // Update icon: fisheye for visible, bullseye for hidden
+    m_toggleViewButton->setText(visible ?
+        QString::fromUtf8("\u25C9") :   // Fisheye (visible)
+        QString::fromUtf8("\u25CE"));   // Bullseye (hidden)
 }
 
 QString RadioControlPanel::selectedPort() const

@@ -128,6 +128,57 @@ void KenwoodController::requestSMeter()
     sendCommand("SM;");
 }
 
+void KenwoodController::requestTunerState()
+{
+    // AC; command reads tuner state
+    sendCommand("AC;");
+}
+
+void KenwoodController::setFrequency(uint64_t frequencyHz)
+{
+    // Format: FAnnnnnnnnnnn; (11 digits, leading zeros)
+    QString cmd = QString("FA%1;").arg(frequencyHz, 11, 10, QChar('0'));
+    sendCommand(cmd);
+}
+
+void KenwoodController::setMode(uint8_t mode)
+{
+    // Kenwood mode mapping: 1=LSB, 2=USB, 3=CW, 4=FM, 5=AM, 6=FSK, 7=CW-R, 9=FSK-R
+    QString cmd = QString("MD%1;").arg(mode);
+    sendCommand(cmd);
+}
+
+void KenwoodController::setTunerState(bool enabled)
+{
+    // AC command: AC P1 P2 P3;
+    // P1=0/1 (RX antenna tuner on/off), P2=0/1 (TX tuner on/off), P3=0/1 (tuning)
+    QString cmd = QString("AC%1%1%1;").arg(enabled ? "1" : "0");
+    sendCommand(cmd);
+}
+
+void KenwoodController::startTune()
+{
+    // Start tuning: AC111;
+    sendCommand("AC111;");
+}
+
+void KenwoodController::playVoiceMemory(int memoryNumber)
+{
+    // PB command: PBnn; (voice memory playback, 01-04 for most Kenwoods)
+    if (memoryNumber < 1 || memoryNumber > 8) {
+        qWarning() << "KenwoodController: Invalid voice memory number:" << memoryNumber;
+        return;
+    }
+    QString cmd = QString("PB%1;").arg(memoryNumber, 2, 10, QChar('0'));
+    sendCommand(cmd);
+}
+
+void KenwoodController::stopVoiceMemory()
+{
+    // PB00 command: Stop voice memory playback
+    sendCommand("PB00;");
+}
+
 void KenwoodController::onReadyRead()
 {
     if (!m_serialPort) return;
@@ -310,6 +361,17 @@ void KenwoodController::processResponse(const QString& response)
             m_currentFrequencyHz = freq;
             qDebug() << "KenwoodController: IF Frequency:" << freq << "Hz";
             emit frequencyChanged(freq);
+        }
+    }
+    // AC - Antenna tuner response (ACxxx;)
+    // Format: AC P1 P2 P3; where P1=RX, P2=TX, P3=tuning
+    else if (response.startsWith("AC") && response.length() >= 5) {
+        // P2 (TX tuner) is the relevant one for "tuner on/off"
+        if (response.length() >= 4) {
+            QChar p2 = response.at(3);  // TX tuner state
+            bool tunerOn = (p2 == '1');
+            qDebug() << "KenwoodController: Tuner state:" << (tunerOn ? "ON" : "OFF");
+            emit tunerStateChanged(tunerOn);
         }
     }
 }

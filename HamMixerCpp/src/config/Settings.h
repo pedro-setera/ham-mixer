@@ -184,6 +184,12 @@ public:
     QList<WebSdrSite> webSdrSites() const { return m_webSdrSites; }
     void setWebSdrSites(const QList<WebSdrSite>& sites) { m_webSdrSites = sites; }
 
+    // Voice memory labels (8 slots)
+    QStringList voiceMemoryLabels() const { return m_voiceMemoryLabels; }
+    void setVoiceMemoryLabels(const QStringList& labels) { m_voiceMemoryLabels = labels; }
+    QString voiceMemoryLabel(int index) const;
+    void setVoiceMemoryLabel(int index, const QString& label);
+
 private:
     DeviceSettings m_devices;
     ChannelSettings m_channel1;
@@ -194,6 +200,9 @@ private:
     SerialSettings m_serial;
     WebSdrSettings m_webSdr;
     QList<WebSdrSite> m_webSdrSites;
+
+    // Voice memory labels (8 slots, user-configurable tips)
+    QStringList m_voiceMemoryLabels;
 
     QString m_version = "1.3";
 

@@ -12,9 +12,11 @@
 #include <QSerialPort>
 #include <QSerialPortInfo>
 #include <QTimer>
+#include <QElapsedTimer>
 #include <QByteArray>
 #include <QString>
 #include <QStringList>
+#include <QQueue>
 
 class CIVController : public RadioController
 {
@@ -45,7 +47,16 @@ public:
     void requestFrequency() override;
     void requestMode() override;
     void requestSMeter() override;
+    void requestTunerState() override;
     void requestTXStatus();
+
+    // Write commands (control the radio)
+    void setFrequency(uint64_t frequencyHz) override;
+    void setMode(uint8_t mode) override;
+    void setTunerState(bool enabled) override;
+    void startTune() override;
+    void playVoiceMemory(int memoryNumber) override;
+    void stopVoiceMemory() override;
 
     // Current values (cached from last poll)
     uint64_t currentFrequency() const override { return m_currentFrequencyHz; }
@@ -58,12 +69,15 @@ private slots:
     void onReadyRead();
     void onPollTimer();
     void onSerialError(QSerialPort::SerialPortError error);
+    void processCommandQueue();
 
 private:
     void setState(ConnectionState newState);
     void setError(const QString& error);
     void processFrame(const QByteArray& frame);
     void sendCommand(const QByteArray& data);
+    void queueCommand(const QByteArray& data);  // Queue command with delay
+    void sendCommandImmediate(const QByteArray& data);  // Send without queueing (for polling)
     bool extractFrames();  // Extract complete frames from buffer
 
     QSerialPort* m_serialPort;
@@ -82,6 +96,12 @@ private:
 
     // Polling state machine
     int m_pollPhase;  // 0=freq, 1=mode, 2=smeter
+
+    // Command queue for reliable timing
+    QQueue<QByteArray> m_commandQueue;
+    QTimer* m_commandTimer;
+    QElapsedTimer m_lastCommandTime;
+    static constexpr int MIN_COMMAND_INTERVAL_MS = 50;  // Minimum ms between commands
 };
 
 #endif // CIVCONTROLLER_H

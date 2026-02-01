@@ -53,6 +53,15 @@ public:
     virtual void requestFrequency() = 0;
     virtual void requestMode() = 0;
     virtual void requestSMeter() = 0;
+    virtual void requestTunerState() = 0;
+
+    // Write commands (control the radio)
+    virtual void setFrequency(uint64_t frequencyHz) = 0;
+    virtual void setMode(uint8_t mode) = 0;
+    virtual void setTunerState(bool enabled) = 0;
+    virtual void startTune() = 0;
+    virtual void playVoiceMemory(int memoryNumber) = 0;
+    virtual void stopVoiceMemory() = 0;
 
     // Current values (cached from last poll)
     virtual uint64_t currentFrequency() const = 0;
@@ -70,6 +79,7 @@ signals:
     void modeChanged(uint8_t mode, const QString& modeName);
     void smeterChanged(int value);  // 0-255 scale
     void txStatusChanged(bool transmitting);  // TX/RX state
+    void tunerStateChanged(bool enabled);  // Tuner on/off state
     void errorOccurred(const QString& error);
     void radioModelDetected(const QString& modelName);
 };

@@ -43,6 +43,14 @@ constexpr uint8_t CMD_NG = 0xFA;               // NG (error) response
 
 // Sub-commands for CMD_TX_STATUS (0x1C)
 constexpr uint8_t SUBCMD_TX_STATE = 0x00;      // TX/RX state (0=RX, 1=TX)
+constexpr uint8_t SUBCMD_TUNER_STATE = 0x01;   // Tuner on/off state
+constexpr uint8_t SUBCMD_TUNER_TUNE = 0x02;    // Start tuning
+
+// Voice/Speech command (0x28) - for TX voice keyer
+// Format: 0x28 0x00 [memory_number]
+// Memory 1-8 = play that memory, Memory 0 = stop/cancel playback
+constexpr uint8_t CMD_SPEECH = 0x28;
+constexpr uint8_t SUBCMD_VOICE_TX_PLAY = 0x00;  // Sub-command for voice TX (memory 1-8 to play, 0 to stop)
 
 // Sub-commands for CMD_READ_METER (0x15)
 constexpr uint8_t SUBCMD_SMETER = 0x02;        // S-meter level
@@ -99,6 +107,14 @@ QByteArray buildCommand(uint8_t command);
  * @return Complete frame
  */
 QByteArray buildCommand(uint8_t command, uint8_t subCommand);
+
+/**
+ * Build a command with data payload
+ * @param command Command byte
+ * @param data Data bytes to append after command
+ * @return Complete frame
+ */
+QByteArray buildCommand(uint8_t command, const QByteArray& data);
 
 /**
  * Parse frequency from BCD-encoded data

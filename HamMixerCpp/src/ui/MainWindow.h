@@ -8,7 +8,6 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QMenu>
-#include <QAction>
 #include <QGroupBox>
 #include <memory>
 #include <deque>
@@ -21,6 +20,7 @@
 #include "ui/Crossfader.h"
 #include "ui/SMeter.h"
 #include "ui/RadioControlPanel.h"
+#include "ui/RadioControlWindow.h"
 #include "serial/RadioController.h"
 #include "websdr/WebSdrManager.h"
 
@@ -69,6 +69,9 @@ private slots:
 
     // View toggle
     void onToggleWebSdrView(bool checked);
+
+    // Radio Control window
+    void onShowRadioControl();
 
     // Config file management
     void onSaveConfig();
@@ -149,9 +152,11 @@ private:
     // Config menu
     QMenu* m_recentConfigsMenu;
 
-    // WebSDR browser view toggle
+    // WebSDR browser view
     QGroupBox* m_browserGroup;
-    QAction* m_showWebSdrViewAction;
+
+    // Radio Control window
+    RadioControlWindow* m_radioControlWindow;
 
     void setupWindow();
     void setupUI();

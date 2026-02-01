@@ -41,6 +41,18 @@ Whether you're chasing DX, monitoring propagation, or comparing reception betwee
 - **Dual S-Meter display** - Compare signal strength between local and remote
 - **Supported protocols**: Icom CI-V (binary) and Kenwood/Elecraft CAT (ASCII)
 
+### Radio Control Window (New in v1.5)
+A comprehensive transceiver control panel for direct radio control without external software:
+- **7-Segment Frequency LCD** - Large, attractive frequency display with MHz/kHz grouping
+- **Band Selector** - One-click band change (160m, 80m, 40m, 30m, 20m, 17m, 15m, 12m, 10m, 6m)
+- **Mode Selector** - Quick mode switching (LSB, USB, CW, AM, FM)
+- **Antenna Tuner Control** - TUNE button and ATU ON/OFF toggle
+- **Voice Memory Playback** - M1-M8 buttons for voice keyer with TX stop on re-click
+- **USB Dial/Jog Wheel Support** - Use external USB dial via PowerToys key mapping (F9=up, F10=down, +=cycle step)
+- **Variable Step Sizes** - 10Hz, 100Hz, 1kHz, 10kHz, 100kHz tuning steps
+- **TX Indicator** - Real-time TX/RX LED with active voice memory highlighting
+- **S-Meter** - Dedicated signal meter for the control window
+
 ### SDR Receiver Support
 - **WebSDR 2.x** - Standard WebSDR sites (PA3FWM software)
 - **KiwiSDR** - KiwiSDR receivers with real-time frequency control
@@ -136,9 +148,9 @@ You can add custom SDR sites through **File > Manage WebSDR...** menu.
 
 ### Top Row Sections (Left to Right)
 - **Radio Connection (30%)**: COM port selection and Connect/Disconnect button (auto-detects protocol)
-- **WebSDR (28%)**: Site selector dropdown with cogwheel button for quick access to site manager
+- **WebSDR (20%)**: Site selector dropdown with cogwheel button for quick access to site manager
 - **Radio Info (25%)**: Current frequency and mode display; shows detected Icom model (e.g., "Radio Info - IC-7300")
-- **Tools (17%)**: TX indicator LED (red when transmitting), REC button with recording indicator
+- **Tools (25%)**: Radio Control button (opens control window), TX indicator LED, REC button with recording indicator
 
 ### Controls Row
 - **Delay/Crossfader**: Time sync controls (0-2000ms) and audio balance

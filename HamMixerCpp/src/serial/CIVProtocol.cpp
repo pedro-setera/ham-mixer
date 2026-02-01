@@ -37,6 +37,14 @@ QByteArray buildCommand(uint8_t command, uint8_t subCommand)
     return buildFrame(ADDR_IC7300, ADDR_CONTROLLER, data);
 }
 
+QByteArray buildCommand(uint8_t command, const QByteArray& payload)
+{
+    QByteArray data;
+    data.append(static_cast<char>(command));
+    data.append(payload);
+    return buildFrame(ADDR_IC7300, ADDR_CONTROLLER, data);
+}
+
 uint64_t parseFrequency(const QByteArray& bcdData)
 {
     if (bcdData.size() < 5) {

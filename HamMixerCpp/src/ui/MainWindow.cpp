@@ -32,7 +32,7 @@ MainWindow::MainWindow(QWidget* parent)
     , m_websdrSmeterValid(false)
     , m_recentConfigsMenu(nullptr)
     , m_browserGroup(nullptr)
-    , m_showWebSdrViewAction(nullptr)
+    , m_radioControlWindow(nullptr)
 {
     // Start S-meter delay timer
     m_smeterTimer.start();
@@ -327,14 +327,6 @@ void MainWindow::setupMenuBar()
     toolsMenu->addAction("&Audio Devices...", this, &MainWindow::onAudioDevicesClicked);
     toolsMenu->addAction("Manage &SDR Sites...", this, &MainWindow::onManageWebSdr);
 
-    toolsMenu->addSeparator();
-
-    // Toggle for showing/hiding WebSDR browser view (compact mode)
-    m_showWebSdrViewAction = toolsMenu->addAction("Show &WebSDR View");
-    m_showWebSdrViewAction->setCheckable(true);
-    m_showWebSdrViewAction->setChecked(true);  // Default: shown
-    connect(m_showWebSdrViewAction, &QAction::toggled, this, &MainWindow::onToggleWebSdrView);
-
     // ===== Help Menu =====
     QMenu* helpMenu = menuBar()->addMenu("&Help");
     helpMenu->addAction("&About", this, [this]() {
@@ -353,9 +345,11 @@ void MainWindow::setupMenuBar()
 
 void MainWindow::connectSignals()
 {
-    // Tools section - record button (now in RadioControlPanel)
+    // Tools section - record button and radio control (now in RadioControlPanel)
     connect(m_radioControlPanel, &RadioControlPanel::recordClicked,
             this, &MainWindow::onRecordClicked);
+    connect(m_radioControlPanel, &RadioControlPanel::radioControlClicked,
+            this, &MainWindow::onShowRadioControl);
 
     // Delay and sync controls
     connect(m_delaySlider, &QSlider::valueChanged, this, &MainWindow::onDelayChanged);
@@ -411,6 +405,8 @@ void MainWindow::connectSignals()
             this, &MainWindow::onWebSdrSiteChanged);
     connect(m_radioControlPanel, &RadioControlPanel::manageSitesClicked,
             this, &MainWindow::onManageWebSdr);
+    connect(m_radioControlPanel, &RadioControlPanel::webSdrViewToggled,
+            this, &MainWindow::onToggleWebSdrView);
 
     connect(m_webSdrManager, &WebSdrManager::stateChanged,
             this, &MainWindow::onWebSdrStateChanged);
@@ -475,15 +471,13 @@ void MainWindow::applySettingsToUI()
     m_radioControlPanel->setSelectedSite(m_settings.webSdr().selectedSiteId);
 
     // Apply WebSDR browser view state (compact/full mode)
-    if (m_showWebSdrViewAction && m_browserGroup) {
+    if (m_browserGroup) {
         bool showBrowser = m_settings.webSdr().showBrowser;
-        m_showWebSdrViewAction->blockSignals(true);
-        m_showWebSdrViewAction->setChecked(showBrowser);
-        m_showWebSdrViewAction->blockSignals(false);
+        m_radioControlPanel->setWebSdrViewVisible(showBrowser);
 
         if (!showBrowser) {
             // Start in compact mode - same height as toggle function
-            static constexpr int COMPACT_HEIGHT = 411;
+            static constexpr int COMPACT_HEIGHT = 413;
             m_browserGroup->hide();
             setMinimumSize(1200, COMPACT_HEIGHT);
             resize(width(), COMPACT_HEIGHT);
@@ -803,6 +797,11 @@ void MainWindow::updateMeters()
         radioSMeterLevel = -80.0f;  // S0 / "No Signal" when not connected
     }
     m_radioSMeter->setLevel(radioSMeterLevel);
+
+    // Also update RadioControlWindow S-meter with same delayed value
+    if (m_radioControlWindow && m_radioControlWindow->isVisible()) {
+        m_radioControlWindow->updateSMeter(radioSMeterLevel);
+    }
 
     // WebSDR S-Meter: Use page's S-meter data if available, otherwise audio level.
     // Apply 200ms delay to compensate for browser audio buffering.
@@ -1292,7 +1291,14 @@ void MainWindow::onSerialDisconnectClicked()
         m_webSdrManager->unloadCurrent();
     }
 
-    // Step 5: Disconnect radio and clean up controller
+    // Step 5: Clean up RadioControlWindow (it holds a pointer to the old controller)
+    if (m_radioControlWindow) {
+        m_radioControlWindow->close();
+        delete m_radioControlWindow;
+        m_radioControlWindow = nullptr;
+    }
+
+    // Step 6: Disconnect radio and clean up controller
     if (m_radioController) {
         m_radioController->disconnect();
         delete m_radioController;
@@ -1310,7 +1316,7 @@ void MainWindow::onSerialDisconnectClicked()
         }
     }
 
-    // Step 6: Reset UI state
+    // Step 7: Reset UI state
     m_radioControlPanel->setSerialConnectionState(RadioController::Disconnected);
     m_radioControlPanel->clearRadioInfo();
     m_radioControlPanel->setTransmitting(false);
@@ -1568,8 +1574,8 @@ void MainWindow::onToggleWebSdrView(bool checked)
     // Update setting
     m_settings.webSdr().showBrowser = checked;
 
-    // Compact mode height: RadioControlPanel (~60) + Content (~290) + margins (~60) = ~411
-    static constexpr int COMPACT_HEIGHT = 411;
+    // Compact mode height: RadioControlPanel (~60) + Content (~290) + margins (~63) = ~413
+    static constexpr int COMPACT_HEIGHT = 413;
 
     if (checked) {
         // Show WebSDR browser view (full mode)
@@ -1606,14 +1612,19 @@ float MainWindow::getDelayedSMeterValue() const
     // Get the current delay setting (in ms)
     int delayMs = m_delaySlider ? m_delaySlider->value() : 0;
 
+    // Compensation for CI-V polling latency (~100ms) + physics smoothing (~50ms)
+    static constexpr int SMETER_LATENCY_COMPENSATION_MS = 150;
+
     if (delayMs == 0 || m_smeterBuffer.empty()) {
         // No delay or no samples - return latest value
         return m_civSMeterDb;
     }
 
-    // Calculate target timestamp (now - delay)
+    // Calculate target timestamp (now - delay + compensation)
+    // We look further back to compensate for display latency
     qint64 now = m_smeterTimer.elapsed();
-    qint64 targetTime = now - delayMs;
+    int adjustedDelay = std::max(0, delayMs - SMETER_LATENCY_COMPENSATION_MS);
+    qint64 targetTime = now - adjustedDelay;
 
     // Find the sample closest to the target time
     // Buffer is ordered oldest to newest
@@ -1689,4 +1700,53 @@ void MainWindow::onWebSdrSmeterChanged(int value)
     }
 
     m_websdrSmeterValid = true;
+}
+
+void MainWindow::onShowRadioControl()
+{
+    // Create window on first use
+    if (!m_radioControlWindow) {
+        m_radioControlWindow = new RadioControlWindow(m_radioController, this);
+
+        // Set voice memory labels from settings
+        m_radioControlWindow->setVoiceMemoryLabels(m_settings.voiceMemoryLabels());
+
+        // Connect signals for live updates if connected
+        if (m_radioController) {
+            connect(m_radioController, &RadioController::frequencyChanged,
+                    m_radioControlWindow, &RadioControlWindow::updateFrequency);
+            connect(m_radioController, &RadioController::modeChanged,
+                    m_radioControlWindow, [this](uint8_t mode, const QString&) {
+                        if (m_radioControlWindow) {
+                            m_radioControlWindow->updateMode(mode);
+                        }
+                    });
+            // Note: S-meter is updated via updateMeters() timer to use delayed value
+            // matching the main GUI S-meter display
+            connect(m_radioController, &RadioController::tunerStateChanged,
+                    m_radioControlWindow, &RadioControlWindow::updateTunerState);
+            connect(m_radioController, &RadioController::txStatusChanged,
+                    m_radioControlWindow, &RadioControlWindow::updateTxStatus);
+            connect(m_radioController, &RadioController::connectionStateChanged,
+                    m_radioControlWindow, [this](RadioController::ConnectionState state) {
+                        if (m_radioControlWindow) {
+                            m_radioControlWindow->updateConnectionState(state == RadioController::Connected);
+                        }
+                    });
+        }
+    }
+
+    // Update connection state
+    m_radioControlWindow->updateConnectionState(m_radioController && m_radioController->isConnected());
+
+    // Update current values if connected
+    if (m_radioController && m_radioController->isConnected()) {
+        m_radioControlWindow->updateFrequency(m_radioController->currentFrequency());
+        m_radioControlWindow->updateMode(m_radioController->currentMode());
+    }
+
+    // Show and bring to front
+    m_radioControlWindow->show();
+    m_radioControlWindow->raise();
+    m_radioControlWindow->activateWindow();
 }

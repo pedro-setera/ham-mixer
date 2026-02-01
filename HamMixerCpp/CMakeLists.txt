@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(HamMixer VERSION 1.4.0 LANGUAGES CXX)
+project(HamMixer VERSION 1.5.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -58,6 +58,8 @@ set(UI_SOURCES
     src/ui/RadioControlPanel.cpp
     src/ui/WebSdrManagerDialog.cpp
     src/ui/AudioDevicesDialog.cpp
+    src/ui/FrequencyLCD.cpp
+    src/ui/RadioControlWindow.cpp
     src/ui/MainWindow.cpp
 )
 
@@ -75,6 +77,8 @@ set(UI_HEADERS
     src/ui/RadioControlPanel.h
     src/ui/WebSdrManagerDialog.h
     src/ui/AudioDevicesDialog.h
+    src/ui/FrequencyLCD.h
+    src/ui/RadioControlWindow.h
     src/ui/MainWindow.h
 )
 

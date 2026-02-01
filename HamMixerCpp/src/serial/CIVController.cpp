@@ -21,7 +21,14 @@ CIVController::CIVController(QObject* parent)
     , m_currentTxStatus(false) // Start assuming RX
     , m_radioModel()
     , m_pollPhase(0)
+    , m_commandTimer(nullptr)
 {
+    // Initialize command queue timer
+    m_commandTimer = new QTimer(this);
+    m_commandTimer->setSingleShot(true);
+    QObject::connect(m_commandTimer, &QTimer::timeout,
+                     this, &CIVController::processCommandQueue);
+    m_lastCommandTime.start();
 }
 
 CIVController::~CIVController()
@@ -80,6 +87,12 @@ void CIVController::disconnect()
 {
     stopPolling();
 
+    // Stop command queue timer and clear queue
+    if (m_commandTimer) {
+        m_commandTimer->stop();
+    }
+    m_commandQueue.clear();
+
     if (m_serialPort) {
         if (m_serialPort->isOpen()) {
             m_serialPort->close();
@@ -136,24 +149,94 @@ void CIVController::stopPolling()
 
 void CIVController::requestFrequency()
 {
-    sendCommand(CIVProtocol::buildCommand(CIVProtocol::CMD_READ_FREQ));
+    // Use immediate send for polling (already on timer)
+    sendCommandImmediate(CIVProtocol::buildCommand(CIVProtocol::CMD_READ_FREQ));
 }
 
 void CIVController::requestMode()
 {
-    sendCommand(CIVProtocol::buildCommand(CIVProtocol::CMD_READ_MODE));
+    // Use immediate send for polling (already on timer)
+    sendCommandImmediate(CIVProtocol::buildCommand(CIVProtocol::CMD_READ_MODE));
 }
 
 void CIVController::requestSMeter()
 {
-    sendCommand(CIVProtocol::buildCommand(CIVProtocol::CMD_READ_METER,
+    // Use immediate send for polling (already on timer)
+    sendCommandImmediate(CIVProtocol::buildCommand(CIVProtocol::CMD_READ_METER,
                                           CIVProtocol::SUBCMD_SMETER));
 }
 
 void CIVController::requestTXStatus()
 {
-    sendCommand(CIVProtocol::buildCommand(CIVProtocol::CMD_TX_STATUS,
+    // Use immediate send for polling (already on timer)
+    sendCommandImmediate(CIVProtocol::buildCommand(CIVProtocol::CMD_TX_STATUS,
                                           CIVProtocol::SUBCMD_TX_STATE));
+}
+
+void CIVController::requestTunerState()
+{
+    // Queue this as it may be called from UI
+    sendCommand(CIVProtocol::buildCommand(CIVProtocol::CMD_TX_STATUS,
+                                          CIVProtocol::SUBCMD_TUNER_STATE));
+}
+
+void CIVController::setFrequency(uint64_t frequencyHz)
+{
+    QByteArray bcdData = CIVProtocol::encodeFrequency(frequencyHz);
+    sendCommand(CIVProtocol::buildCommand(CIVProtocol::CMD_WRITE_FREQ, bcdData));
+}
+
+void CIVController::setMode(uint8_t mode)
+{
+    QByteArray modeData;
+    modeData.append(static_cast<char>(mode));
+    sendCommand(CIVProtocol::buildCommand(CIVProtocol::CMD_WRITE_MODE, modeData));
+}
+
+void CIVController::setTunerState(bool enabled)
+{
+    QByteArray data;
+    data.append(static_cast<char>(CIVProtocol::SUBCMD_TUNER_STATE));
+    data.append(static_cast<char>(enabled ? 0x01 : 0x00));
+    sendCommand(CIVProtocol::buildCommand(CIVProtocol::CMD_TX_STATUS, data));
+}
+
+void CIVController::startTune()
+{
+    // IC-7300 tune command: 0x1C 0x01 0x02
+    // Sub-command 0x01 = Tuner control
+    // Data 0x02 = Start tuning
+    QByteArray data;
+    data.append(static_cast<char>(CIVProtocol::SUBCMD_TUNER_STATE));  // 0x01
+    data.append(static_cast<char>(0x02));  // Start tune
+    sendCommand(CIVProtocol::buildCommand(CIVProtocol::CMD_TX_STATUS, data));
+    qDebug() << "CIVController: Sent TUNE command (1C 01 02)";
+}
+
+void CIVController::playVoiceMemory(int memoryNumber)
+{
+    // Memory numbers are 1-8
+    // IC-7300 voice TX keyer: Command 0x28, Sub-cmd 0x00, Data = memory (01-08)
+    if (memoryNumber < 1 || memoryNumber > 8) {
+        qWarning() << "CIVController: Invalid voice memory number:" << memoryNumber;
+        return;
+    }
+    QByteArray data;
+    data.append(static_cast<char>(CIVProtocol::SUBCMD_VOICE_TX_PLAY));  // 0x00
+    data.append(static_cast<char>(memoryNumber));
+    sendCommand(CIVProtocol::buildCommand(CIVProtocol::CMD_SPEECH, data));
+    qDebug() << "CIVController: Sent Voice Memory" << memoryNumber << "command (28 00" << QString("%1").arg(memoryNumber, 2, 16, QChar('0')) << ")";
+}
+
+void CIVController::stopVoiceMemory()
+{
+    // IC-7300 stop voice TX keyer: Command 0x28, Sub-cmd 0x00, Data 0x00
+    // Sending memory number 0 cancels the current playback
+    QByteArray data;
+    data.append(static_cast<char>(CIVProtocol::SUBCMD_VOICE_TX_PLAY));  // 0x00
+    data.append(static_cast<char>(0x00));  // Memory 0 = stop/cancel
+    sendCommand(CIVProtocol::buildCommand(CIVProtocol::CMD_SPEECH, data));
+    qDebug() << "CIVController: Sent Stop Voice Memory command (28 00 00)";
 }
 
 void CIVController::onReadyRead()
@@ -272,6 +355,51 @@ void CIVController::setError(const QString& error)
 
 void CIVController::sendCommand(const QByteArray& data)
 {
+    // Queue command to ensure minimum delay between commands
+    queueCommand(data);
+}
+
+void CIVController::queueCommand(const QByteArray& data)
+{
+    if (!m_serialPort || !m_serialPort->isOpen()) {
+        qWarning() << "CIVController: Cannot queue command - port not open";
+        return;
+    }
+
+    m_commandQueue.enqueue(data);
+
+    // If timer not running, start processing
+    if (!m_commandTimer->isActive()) {
+        processCommandQueue();
+    }
+}
+
+void CIVController::processCommandQueue()
+{
+    if (m_commandQueue.isEmpty()) {
+        return;
+    }
+
+    // Check if enough time has passed since last command
+    qint64 elapsed = m_lastCommandTime.elapsed();
+    if (elapsed < MIN_COMMAND_INTERVAL_MS) {
+        // Schedule to run after remaining delay
+        m_commandTimer->start(MIN_COMMAND_INTERVAL_MS - static_cast<int>(elapsed));
+        return;
+    }
+
+    // Send next command in queue
+    QByteArray data = m_commandQueue.dequeue();
+    sendCommandImmediate(data);
+
+    // If more commands in queue, schedule next
+    if (!m_commandQueue.isEmpty()) {
+        m_commandTimer->start(MIN_COMMAND_INTERVAL_MS);
+    }
+}
+
+void CIVController::sendCommandImmediate(const QByteArray& data)
+{
     if (!m_serialPort || !m_serialPort->isOpen()) {
         qWarning() << "CIVController: Cannot send command - port not open";
         return;
@@ -280,6 +408,7 @@ void CIVController::sendCommand(const QByteArray& data)
     qDebug() << "CIVController: TX:" << data.toHex(' ');
     qint64 bytesWritten = m_serialPort->write(data);
     m_serialPort->flush();
+    m_lastCommandTime.restart();
     qDebug() << "CIVController: Wrote" << bytesWritten << "bytes";
 }
 
@@ -465,19 +594,26 @@ void CIVController::processFrame(const QByteArray& frame)
         case CIVProtocol::CMD_TX_STATUS:
         {
             // TX status response: subcommand + state byte
-            // Format: [subcmd 0x00] [state: 0x00=RX, 0x01=TX]
             qDebug() << "CIVController: Processing TX_STATUS command, data size:" << data.size()
                      << "data:" << data.toHex(' ');
 
             if (data.size() >= 2) {
                 uint8_t subcmd = static_cast<uint8_t>(data[0]);
+                uint8_t state = static_cast<uint8_t>(data[1]);
+
                 if (subcmd == CIVProtocol::SUBCMD_TX_STATE) {
-                    bool txActive = (static_cast<uint8_t>(data[1]) == 0x01);
+                    // TX/RX state: 0x00=RX, 0x01=TX
+                    bool txActive = (state == 0x01);
                     if (txActive != m_currentTxStatus) {
                         m_currentTxStatus = txActive;
                         qDebug() << "CIVController: TX status changed to:" << (txActive ? "TX" : "RX");
                         emit txStatusChanged(txActive);
                     }
+                } else if (subcmd == CIVProtocol::SUBCMD_TUNER_STATE) {
+                    // Tuner state: 0x00=OFF, 0x01=ON
+                    bool tunerOn = (state == 0x01);
+                    qDebug() << "CIVController: Tuner state:" << (tunerOn ? "ON" : "OFF");
+                    emit tunerStateChanged(tunerOn);
                 }
             }
             break;

@@ -26,6 +26,9 @@ Settings::Settings()
 
     // Default WebSDR sites
     m_webSdrSites = WebSdrSite::defaultSites();
+
+    // Default voice memory labels (8 slots)
+    m_voiceMemoryLabels = QStringList{"CQ", "Call", "73", "QRZ", "RST", "Name", "QTH", "Info"};
 }
 
 QString Settings::getConfigDir()
@@ -230,6 +233,25 @@ void Settings::loadRecentConfigs()
     }
 }
 
+QString Settings::voiceMemoryLabel(int index) const
+{
+    if (index >= 0 && index < m_voiceMemoryLabels.size()) {
+        return m_voiceMemoryLabels[index];
+    }
+    return QString("M%1").arg(index + 1);
+}
+
+void Settings::setVoiceMemoryLabel(int index, const QString& label)
+{
+    // Ensure list has enough slots
+    while (m_voiceMemoryLabels.size() <= index) {
+        m_voiceMemoryLabels.append(QString("M%1").arg(m_voiceMemoryLabels.size() + 1));
+    }
+    if (index >= 0 && index < m_voiceMemoryLabels.size()) {
+        m_voiceMemoryLabels[index] = label;
+    }
+}
+
 QJsonObject Settings::toJson() const
 {
     QJsonObject root;
@@ -251,7 +273,7 @@ QJsonObject Settings::toJson() const
     ch1["pan"] = m_channel1.pan;
     ch1["delay_ms"] = m_channel1.delayMs;
     ch1["muted"] = m_channel1.muted;
-    ch1["auto_sync_enabled"] = m_channel1.autoSyncEnabled;
+    // Note: auto_sync_enabled is intentionally NOT saved - always starts disabled
     root["channel1"] = ch1;
 
     // Channel 2
@@ -303,6 +325,13 @@ QJsonObject Settings::toJson() const
 
     root["websdr"] = webSdr;
 
+    // Voice memory labels
+    QJsonArray voiceLabelsArray;
+    for (const QString& label : m_voiceMemoryLabels) {
+        voiceLabelsArray.append(label);
+    }
+    root["voice_memory_labels"] = voiceLabelsArray;
+
     return root;
 }
 
@@ -325,7 +354,8 @@ void Settings::fromJson(const QJsonObject& json)
     m_channel1.pan = ch1["pan"].toInt(-100);
     m_channel1.delayMs = ch1["delay_ms"].toInt(300);
     m_channel1.muted = ch1["muted"].toBool(false);
-    m_channel1.autoSyncEnabled = ch1["auto_sync_enabled"].toBool(false);
+    // autoSyncEnabled is always false on startup - not loaded from config
+    m_channel1.autoSyncEnabled = false;
 
     // Channel 2
     QJsonObject ch2 = json["channel2"].toObject();
@@ -381,5 +411,18 @@ void Settings::fromJson(const QJsonObject& json)
                 m_webSdrSites.append(site);
             }
         }
+    }
+
+    // Voice memory labels
+    QJsonArray voiceLabelsArray = json["voice_memory_labels"].toArray();
+    if (!voiceLabelsArray.isEmpty()) {
+        m_voiceMemoryLabels.clear();
+        for (const QJsonValue& val : voiceLabelsArray) {
+            m_voiceMemoryLabels.append(val.toString());
+        }
+    }
+    // Ensure we have at least 8 labels
+    while (m_voiceMemoryLabels.size() < 8) {
+        m_voiceMemoryLabels.append(QString("M%1").arg(m_voiceMemoryLabels.size() + 1));
     }
 }

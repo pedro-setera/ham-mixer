@@ -61,15 +61,21 @@ public:
     void setRecordEnabled(bool enabled);
     void setTransmitting(bool transmitting);
 
+    // WebSDR view toggle
+    void setWebSdrViewVisible(bool visible);
+    bool isWebSdrViewVisible() const { return m_webSdrViewVisible; }
+
 signals:
     void serialConnectClicked();
     void serialDisconnectClicked();
     void portChanged(const QString& port);
     void webSdrSiteChanged(const WebSdrSite& site);
     void manageSitesClicked();
+    void webSdrViewToggled(bool visible);
 
     // Tools signals
     void recordClicked(bool checked);
+    void radioControlClicked();
 
 private slots:
     void onConnectButtonClicked();
@@ -89,6 +95,8 @@ private:
     // WebSDR controls
     QComboBox* m_siteCombo;
     QPushButton* m_manageButton;
+    QPushButton* m_toggleViewButton;
+    bool m_webSdrViewVisible;
 
     // Info display
     QLabel* m_frequencyLabel;
@@ -99,6 +107,7 @@ private:
     QLabel* m_recordIndicator;
     QLabel* m_txLabel;
     QLabel* m_txIndicator;
+    QPushButton* m_radioControlButton;
     QTimer* m_blinkTimer;
     bool m_recording;
     bool m_blinkState;

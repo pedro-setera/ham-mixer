@@ -61,9 +61,9 @@ private:
     // Readout smoothing constant (lower = slower/smoother updates)
     static constexpr float READOUT_SMOOTHING = 0.02f;
 
-    // Physical constants (tuned for responsive movement with minimal overshoot)
-    static constexpr float NEEDLE_STIFFNESS = 60.0f;  // Higher = faster response
-    static constexpr float NEEDLE_DAMPING = 0.55f;    // Higher = less spring bounce
+    // Physical constants (tuned for fast response to match audio delay sync)
+    static constexpr float NEEDLE_STIFFNESS = 180.0f;  // Higher = faster response (was 60)
+    static constexpr float NEEDLE_DAMPING = 0.75f;     // Higher = less spring bounce (was 0.55)
     static constexpr float PHYSICS_FPS = 60.0f;
 
     // Angle range (calculated from scale coordinates on background image)

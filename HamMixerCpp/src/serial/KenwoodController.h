@@ -37,6 +37,15 @@ public:
     void requestFrequency() override;
     void requestMode() override;
     void requestSMeter() override;
+    void requestTunerState() override;
+
+    // Write commands (control the radio)
+    void setFrequency(uint64_t frequencyHz) override;
+    void setMode(uint8_t mode) override;
+    void setTunerState(bool enabled) override;
+    void startTune() override;
+    void playVoiceMemory(int memoryNumber) override;
+    void stopVoiceMemory() override;
 
     uint64_t currentFrequency() const override { return m_currentFrequencyHz; }
     uint8_t currentMode() const override { return m_currentMode; }
