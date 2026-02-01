@@ -69,6 +69,7 @@ private slots:
 
     // Settings dialogs
     void onAudioDevicesClicked();
+    void onVoiceMemoryConfig();
 
     // View toggle
     void onToggleWebSdrView(bool checked);
@@ -172,9 +173,18 @@ private:
     QPushButton* m_tuneButton;
     QPushButton* m_tunerToggle;
     bool m_tunerEnabled = false;
-    QPushButton* m_voiceButtons[8];
+    QPushButton* m_voiceButtons[8] = {nullptr};
     int m_activeVoiceMemory = 0;  // 0 = none, 1-8 = active memory
     QStringList m_voiceMemoryLabels;
+
+    // Marquee animation for long labels (>12 chars)
+    QTimer* m_marqueeTimer;
+    int m_marqueeOffset[8] = {0};      // Current scroll offset for each button
+    int m_marqueePauseCount[8] = {0};  // Pause counter at start/end of scroll
+    static constexpr int MARQUEE_MAX_CHARS = 12;
+    static constexpr int MARQUEE_PAUSE_TICKS = 10;  // Pause at start (10 * 150ms = 1.5s)
+    void updateMarqueeLabels();
+    void updateVoiceButtonLabels();
 
     // Band definitions (MHz)
     static constexpr double BANDS[10] = {1.8, 3.5, 7.0, 10.0, 14.0, 18.0, 21.0, 24.0, 28.0, 50.0};

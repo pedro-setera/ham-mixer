@@ -59,6 +59,7 @@ set(UI_SOURCES
     src/ui/WebSdrManagerDialog.cpp
     src/ui/AudioDevicesDialog.cpp
     src/ui/FrequencyLCD.cpp
+    src/ui/VoiceMemoryDialog.cpp
     src/ui/MainWindow.cpp
 )
 
@@ -77,6 +78,7 @@ set(UI_HEADERS
     src/ui/WebSdrManagerDialog.h
     src/ui/AudioDevicesDialog.h
     src/ui/FrequencyLCD.h
+    src/ui/VoiceMemoryDialog.h
     src/ui/MainWindow.h
 )
 

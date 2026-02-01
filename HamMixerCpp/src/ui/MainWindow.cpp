@@ -2,6 +2,7 @@
 #include "ui/Styles.h"
 #include "ui/WebSdrManagerDialog.h"
 #include "ui/AudioDevicesDialog.h"
+#include "ui/VoiceMemoryDialog.h"
 #include "audio/MixerCore.h"
 #include "audio/AudioSync.h"
 #include "serial/CIVProtocol.h"
@@ -79,6 +80,11 @@ MainWindow::MainWindow(QWidget* parent)
     m_dialInactiveTimer->setSingleShot(true);
     connect(m_dialInactiveTimer, &QTimer::timeout, this, &MainWindow::onDialInactive);
 
+    // Marquee timer for scrolling long voice memory labels
+    m_marqueeTimer = new QTimer(this);
+    m_marqueeTimer->setInterval(150);  // Scroll speed: 150ms per character
+    connect(m_marqueeTimer, &QTimer::timeout, this, &MainWindow::updateMarqueeLabels);
+
     qDebug() << "MainWindow created";
 }
 
@@ -89,6 +95,7 @@ MainWindow::~MainWindow()
     m_autoSyncTimer->stop();
     m_countdownTimer->stop();
     m_dialInactiveTimer->stop();
+    m_marqueeTimer->stop();
 
     // Disconnect radio if connected
     if (m_radioController && m_radioController->isConnected()) {
@@ -338,6 +345,7 @@ void MainWindow::setupMenuBar()
 
     toolsMenu->addAction("&Audio Devices...", this, &MainWindow::onAudioDevicesClicked);
     toolsMenu->addAction("Manage &SDR Sites...", this, &MainWindow::onManageWebSdr);
+    toolsMenu->addAction("&Voice Memory...", this, &MainWindow::onVoiceMemoryConfig);
 
     // ===== Help Menu =====
     QMenu* helpMenu = menuBar()->addMenu("&Help");
@@ -712,12 +720,7 @@ void MainWindow::applySettingsToUI()
 
     // Apply voice memory labels to buttons
     m_voiceMemoryLabels = m_settings.voiceMemoryLabels();
-    for (int i = 0; i < 8; i++) {
-        QString label = (i < m_voiceMemoryLabels.size() && !m_voiceMemoryLabels[i].isEmpty())
-                        ? m_voiceMemoryLabels[i]
-                        : QString("Memory %1").arg(i + 1);
-        m_voiceButtons[i]->setToolTip(label);
-    }
+    updateVoiceButtonLabels();
 
     // Apply WebSDR settings - update site list from loaded settings
     // This is important because setupUI() ran before load() with default sites
@@ -1439,6 +1442,9 @@ void MainWindow::onSerialConnectClicked()
 
     // Enable radio controls (Band/Mode/Tuner/Voice buttons)
     setRadioControlsEnabled(true);
+
+    // Request current tuner state from radio (so ATU button shows correct state)
+    m_radioController->requestTunerState();
 
     // Update display with initial values from detection
     // (The signals were consumed by detection lambda, so we need to manually update)
@@ -2373,4 +2379,105 @@ void MainWindow::onDialInactive()
     // Dial has been inactive for 500ms - resume accepting frequency updates from radio
     m_dialActive = false;
     qDebug() << "MainWindow: Dial inactive, resuming radio feedback";
+}
+
+// ========== Voice Memory Configuration ==========
+
+void MainWindow::onVoiceMemoryConfig()
+{
+    VoiceMemoryDialog dialog(m_voiceMemoryLabels, this);
+
+    if (dialog.exec() == QDialog::Accepted) {
+        m_voiceMemoryLabels = dialog.labels();
+        m_settings.setVoiceMemoryLabels(m_voiceMemoryLabels);
+        m_settings.markDirty();
+        m_settings.save();
+
+        // Update button labels
+        updateVoiceButtonLabels();
+
+        qDebug() << "Voice memory labels updated:" << m_voiceMemoryLabels;
+    }
+}
+
+void MainWindow::updateVoiceButtonLabels()
+{
+    // Reset marquee state
+    for (int i = 0; i < 8; i++) {
+        m_marqueeOffset[i] = 0;
+        m_marqueePauseCount[i] = 0;
+    }
+
+    bool needsMarquee = false;
+
+    for (int i = 0; i < 8; i++) {
+        // Safety check - ensure button exists
+        if (!m_voiceButtons[i]) continue;
+
+        QString label = (i < m_voiceMemoryLabels.size() && !m_voiceMemoryLabels[i].isEmpty())
+                        ? m_voiceMemoryLabels[i]
+                        : QString("M%1").arg(i + 1);
+
+        // Set tooltip to full label
+        m_voiceButtons[i]->setToolTip(label);
+
+        // Set button text (truncated if needed)
+        if (label.length() > MARQUEE_MAX_CHARS) {
+            m_voiceButtons[i]->setText(label.left(MARQUEE_MAX_CHARS));
+            needsMarquee = true;
+        } else {
+            m_voiceButtons[i]->setText(label);
+        }
+    }
+
+    // Start or stop marquee timer based on whether any labels need scrolling
+    if (needsMarquee) {
+        if (m_marqueeTimer && !m_marqueeTimer->isActive()) {
+            m_marqueeTimer->start();
+        }
+    } else if (m_marqueeTimer) {
+        m_marqueeTimer->stop();
+    }
+}
+
+void MainWindow::updateMarqueeLabels()
+{
+    for (int i = 0; i < 8; i++) {
+        // Safety check - ensure button exists
+        if (!m_voiceButtons[i]) continue;
+
+        QString fullLabel = (i < m_voiceMemoryLabels.size() && !m_voiceMemoryLabels[i].isEmpty())
+                            ? m_voiceMemoryLabels[i]
+                            : QString("M%1").arg(i + 1);
+
+        // Only scroll labels longer than MARQUEE_MAX_CHARS
+        if (fullLabel.length() <= MARQUEE_MAX_CHARS) {
+            continue;
+        }
+
+        // Handle pause at start/end of scroll
+        if (m_marqueePauseCount[i] > 0) {
+            m_marqueePauseCount[i]--;
+            continue;
+        }
+
+        // Calculate the visible portion with current offset
+        int maxOffset = fullLabel.length() - MARQUEE_MAX_CHARS;
+
+        // Advance scroll offset
+        m_marqueeOffset[i]++;
+
+        // Check if we've scrolled to the end
+        if (m_marqueeOffset[i] > maxOffset) {
+            // Reset to start and pause
+            m_marqueeOffset[i] = 0;
+            m_marqueePauseCount[i] = MARQUEE_PAUSE_TICKS;
+        } else if (m_marqueeOffset[i] == 1) {
+            // Just started scrolling - no additional pause needed
+        }
+
+        // Update button text with current visible portion
+        QString visibleText = fullLabel.mid(m_marqueeOffset[i], MARQUEE_MAX_CHARS);
+        m_voiceButtons[i]->setText(visibleText);
+    }
 }

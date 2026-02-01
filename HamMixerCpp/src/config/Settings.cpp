@@ -28,7 +28,7 @@ Settings::Settings()
     m_webSdrSites = WebSdrSite::defaultSites();
 
     // Default voice memory labels (8 slots)
-    m_voiceMemoryLabels = QStringList{"CQ", "Call", "73", "QRZ", "RST", "Name", "QTH", "Info"};
+    m_voiceMemoryLabels = QStringList{"M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8"};
 }
 
 QString Settings::getConfigDir()
